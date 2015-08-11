@@ -1,14 +1,10 @@
-#undef NDEBUG
-#define NDEBUG
-#include <assert.h>
 // [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::depends(BH)]]
 
 #include <RcppArmadillo.h>
 #include <boost/random.hpp>
 #include <boost/random/uniform_real_distribution.hpp>
-#include <math.h>
-#include <cmath>
+
 
 #include <boost/config/no_tr1/cmath.hpp>
 #include <istream>
@@ -216,6 +212,9 @@ namespace mjd {
     } // namespace random
 
     using random::normal_distribution;
+    using std::pow;
+    using std::exp;
+    using std::sqrt;
 
     // Returns the erf() of a value (not super precice, but ok)
     double erf(double x)
@@ -235,13 +234,13 @@ namespace mjd {
     {
       //Constants
       static const double pi = 3.14159265;
-      return exp( -1 * (x - mu) * (x - mu) / (2 * sigma * sigma)) / (sigma * sqrt(2 * pi));
+      return exp( -1 * (x - mu) * (x - mu) / (2 * sigma * sigma)) / (sigma * sqrt(2.0 * pi));
     }
 
     // Returns the probability of [-inf,x] of a gaussian distribution
     double cdf(double x, double mu, double sigma)
     {
-        return 0.5 * (1 + mjd::erf((x - mu) / (sigma * sqrt(2.))));
+        return 0.5 * (1 + mjd::erf((x - mu) / (sigma * sqrt(2.0))));
     }
 
 
@@ -465,10 +464,9 @@ namespace mjd {
     return to_return;
   };
 
-
-
 } //end of mjd namespace
 
+using std::log;
 
 // [[Rcpp::export]]
 List Metropolis_Hastings_Sampler (int number_of_iterations,
@@ -482,14 +480,15 @@ List Metropolis_Hastings_Sampler (int number_of_iterations,
           arma::mat pairs,
           arma::vec alphas,
           int together,
-          int seed) {
+          int seed,
+          int number_of_samples_to_store) {
 
   // Allocate variables and data structures
   double variance = shape_parameter;
   int list_length = 4;
   List to_return(list_length);
-  int number_of_samples_to_store = ceil (number_of_iterations /
-      take_sample_every);
+  //int number_of_samples_to_store = ceil (number_of_iterations /
+  //    take_sample_every);
   int number_of_thetas = statistics_to_use.n_elem;
   int MH_Counter = 0;
   int Storage_Counter = 0;
@@ -503,7 +502,8 @@ List Metropolis_Hastings_Sampler (int number_of_iterations,
 
   // Set RNG and define uniform distribution
   boost::mt19937 generator(seed);
-  boost::random::uniform_real_distribution<double>  uniform_distribution(0.0,1.0);
+  //boost::random::uniform_real_distribution<double>  uniform_distribution(0.0,1.0);
+  boost::uniform_01<double> uniform_distribution;
 
   // Outer loop over the number of samples
   for (int n = 0; n < number_of_iterations; ++n) {
@@ -574,6 +574,7 @@ List Metropolis_Hastings_Sampler (int number_of_iterations,
 
     log_prob_accept += (proposed_addition - current_addition);
 
+    //double rand_num = uniform_distribution(generator);
     double rand_num = uniform_distribution(generator);
     double lud = 0;
     lud = log(rand_num);
