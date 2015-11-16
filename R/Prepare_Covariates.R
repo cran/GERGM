@@ -3,7 +3,10 @@ Prepare_Network_and_Covariates <- function(formula,
                                     possible_covariate_terms,
                                     possible_network_terms,
                                     covariate_data = NULL,
-                                    normalization_type = c("log","division")){
+                                    normalization_type = c("log","division"),
+                                    is_correlation_network = FALSE,
+                                    is_directed = FALSE
+                                    ){
 
   node_covariates_list <- Parse_Formula_Object(formula = formula,
      possible_structural_terms =possible_structural_terms,
@@ -81,7 +84,7 @@ Prepare_Network_and_Covariates <- function(formula,
         stop(paste("You specified a node level covariate term:",node_covariates_list[[i]]$term, "Node level covariate effects must be one of: 'sender', 'receiver', 'absdiff', 'nodecov' or, 'nodefactor' , please respecify."))
       }
     }
-    cat("You have specified",num_covariates - 1,"node level covariate effects.\n")
+    cat("You have specified", num_covariates - 1,"node level covariate effects.\n")
   }
 
   #determine the type and number of user provided network covariates (will not be altered)
@@ -148,10 +151,11 @@ Prepare_Network_and_Covariates <- function(formula,
       for(j in 1:num_nodes){
         for(k in 1:num_nodes){
           if(j != k){
-            row1 <- which(toupper(rownames(covariates)) == toupper(node_names)[k])
-            unique_vals <- unique(covariates[row1,covariate_column])
-            idx <- which(unique_vals == covariates[row1,covariate_column])
-            if(level == idx){
+            col1 <- which(toupper(rownames(covariates)) == toupper(node_names)[k])
+            row1 <- which(toupper(rownames(covariates)) == toupper(node_names)[j])
+            colval <- covariates[col1,covariate_column]
+            rowval <- covariates[row1,covariate_column]
+            if(level == colval & level == rowval){
               return_matrix[j,k] <- 1
             }
           }
@@ -162,14 +166,14 @@ Prepare_Network_and_Covariates <- function(formula,
   }
 
   #########################################################
-  #' Construct transformed_covariates: An array of covariates which parameterize
-  #' the latent space.
+  # Construct transformed_covariates: An array of covariates which parameterize
+  # the latent space.
 
   # Generate array which covaries will be transformed into
   transformed_covariates <- array(0,dim=c(num_nodes,num_nodes,num_covariates))
   transformed_covariates[,,1] <- 1
-  #' Set a slice counter to keep track of where we should add the covariates
-  #' in the resulting covariate array.
+  # Set a slice counter to keep track of where we should add the covariates
+  # in the resulting covariate array.
   slice_counter <- 2
 
   # generate vector to store covariate names
@@ -185,11 +189,11 @@ Prepare_Network_and_Covariates <- function(formula,
   #1. generate sender and reciever effects
   if(node_covariates_provided){
 
-    #' Determine if type_of_effect and covariates_to_use have the same length or
-    #' if no covariates_to_use is provided, that the number of columns in
-    #' covariate_data is the same length.
+    # Determine if type_of_effect and covariates_to_use have the same length or
+    # if no covariates_to_use is provided, that the number of columns in
+    # covariate_data is the same length.
     node_covariates_list[[i]]$num_levels
-    #' Loop through covariates
+    # Loop through covariates
     for(i in 1:length(node_covariates_list)){
        col_index <- which(tolower(colnames(covariate_data)) ==
                              tolower(node_covariates_list[[i]]$covariate))
@@ -208,8 +212,9 @@ Prepare_Network_and_Covariates <- function(formula,
                                                     node_names = node_names,
                                                     covariates = covariate_data,
                                                     covariate_column = col_index,
-                                                    effect_type = "sender",
+                                                    effect_type = "nodefactor",
                                                     level = node_covariates_list[[i]]$levels[j])
+            print(add)
             transformed_covariates[,,slice_counter] <- add
             slice_names[slice_counter] <- paste(node_covariates_list[[i]]$covariate,node_covariates_list[[i]]$term,node_covariates_list[[i]]$levels[j],sep="_")
             slice_counter <- slice_counter + 1
@@ -243,31 +248,64 @@ Prepare_Network_and_Covariates <- function(formula,
 
 
   #3. return list object
+  #
+  #
+  if(!is_directed){
+    if(isSymmetric(raw_network) == FALSE){
+      warning("You provided an asymmetric network when you specified that the
+              network was undirect. Setting the upper triangle equal to the lower
+              triangle. If the lower is larger, then it will be coppied,
+              otherwise the upper will be coppied. To avoid problems, please
+              provide a symmetric matrix.")
+
+      lower_to_upper <- function(m) {
+        m[upper.tri(m)] <- t(m)[upper.tri(m)]
+        m
+      }
+
+      upper_to_lower <- function(m) {
+        m[lower.tri(m)] <- t(m)[lower.tri(m)]
+        m
+      }
+
+      if(sum(upper.tri(raw_network)) > sum(lower.tri(raw_network))){
+        raw_network <- upper_to_lower(raw_network)
+      }else{
+        raw_network <- lower_to_upper(raw_network)
+      }
+      print(round(raw_network,1))
+    }
+  }
 
   if(!node_covariates_provided & !network_covariates_provided){
-    #' If no covariates were provided, then make sure the network lives on the
-    #' [0,1] interval and standardize it by one of the provided methods if it
-    #' does not. Then return the network and no covariates.
+    # If no covariates were provided, then make sure the network lives on the
+    # [0,1] interval and standardize it by one of the provided methods if it
+    # does not. Then return the network and no covariates.
 
-    if(min(raw_network) < 0){
-      raw_network <- raw_network - min(raw_network)
-    }
-    if(max(raw_network) > 1){
-      if(normalization_type[1] == "log"){
-        raw_network <- raw_network + 1
-        network <- log(raw_network)
-        network <- network/max(network)
-      }
-
-      if(normalization_type[1] == "division"){
-        network <- raw_network/max(raw_network)
-      }
-
-      diag(network) <- 0
-    }else{
+    # deal with the case where we have a correlation matrix provided
+    if(is_correlation_network){
       network <- raw_network
-    }
+      diag(network) <- 1
+    }else{
+      if(min(raw_network) < 0){
+        raw_network <- raw_network - min(raw_network)
+      }
+      if(max(raw_network) > 1){
+        if(normalization_type[1] == "log"){
+          raw_network <- raw_network + 1
+          network <- log(raw_network)
+          network <- network/max(network)
+        }
 
+        if(normalization_type[1] == "division"){
+          network <- raw_network/max(raw_network)
+        }
+
+        diag(network) <- 0
+      }else{
+        network <- raw_network
+      }
+    }
     return(list(network = network))
   }else{
     #4. standardize covariates
@@ -277,8 +315,7 @@ Prepare_Network_and_Covariates <- function(formula,
 
     #assign the dimnames to the array object
     dimnames(transformed_covariates) <- list(node_names,node_names,slice_names)
-
-    return(list(network = raw_network, transformed_covariates = transformed_covariates))
+    return(list(network = raw_network, transformed_covariates = transformed_covariates, gpar.names = slice_names))
   }
 
 } # End of function definition.

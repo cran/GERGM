@@ -114,8 +114,8 @@ edgeweight <- function(net, alpha = 1, together) {
 #-------------------------------------------------------
 
 absdiff <- function(attrname, pow, directed){
-  #' sum of the absolute difference of the nodal attribute "attrname" between
-  #' every pair of nodes
+  # sum of the absolute difference of the nodal attribute "attrname" between
+  # every pair of nodes
   diff <- numeric()
   for(i in 1:length(attrname)){
     for(j in 1:length(attrname)){
@@ -130,8 +130,8 @@ absdiff <- function(attrname, pow, directed){
 #-------------------------------------------------------
 
 atleast <- function(network, threshold, directed){
-  #' number of edges that have weight that exceed specified threshold if
-  #' threshold = 0, this is just the number of edges
+  # number of edges that have weight that exceed specified threshold if
+  # threshold = 0, this is just the number of edges
   stat <- length(which(network > threshold | network == threshold))
   if(directed == FALSE){
     stat <- stat/2
@@ -142,8 +142,8 @@ atleast <- function(network, threshold, directed){
 #-------------------------------------------------------
 
 degree_atleast = function(network, threshold, directed){
-  #' the sum of edgeweights that exceed specified threshold if threshold = 0,
-  #' this is just the total edgeweight of the network
+  # the sum of edgeweights that exceed specified threshold if threshold = 0,
+  # this is just the total edgeweight of the network
   directed <- directed[1]
   stat <- sum(network[which(network > threshold | network == threshold)])
   if(directed == FALSE){
@@ -155,8 +155,8 @@ degree_atleast = function(network, threshold, directed){
 #-------------------------------------------------------
 
 density_atleast = function(network, threshold = 0, directed = c(TRUE, FALSE)){
-  #' the sum of edgeweights that exceed specified threshold if threshold = 0,
-  #' this is just the total edgeweight of the network
+  # the sum of edgeweights that exceed specified threshold if threshold = 0,
+  # this is just the total edgeweight of the network
   directed <- directed[1]
   stat <- sum(network[which(network > threshold | network == threshold)])/length(which(network > threshold | network == threshold))
   return(stat)
@@ -165,11 +165,11 @@ density_atleast = function(network, threshold = 0, directed = c(TRUE, FALSE)){
 #-------------------------------------------------------
 
 mutual = function(network, threshold, form){
-  #' mutuality statistic calculated for each pair of mutual edges that have
-  #' edgeweights that exceed threshold. The form specifies which statistic is
-  #' calculated and can take the following values: form = c("min", "product",
-  #' "geometric") DEFAULT is "min". This can only be used for a directed
-  #' network.
+  # mutuality statistic calculated for each pair of mutual edges that have
+  # edgeweights that exceed threshold. The form specifies which statistic is
+  # calculated and can take the following values: form = c("min", "product",
+  # "geometric") DEFAULT is "min". This can only be used for a directed
+  # network.
   form <- form[1]
   indx <- which(network < threshold)
   network[indx] <- 0
@@ -196,9 +196,9 @@ mutual = function(network, threshold, form){
 #-------------------------------------------------------
 
 nodecov = function(network, attrname, threshold){
-  #' statistic that adds the sum of attribute[i] and attribute[j] for all edges
-  #' (i,j) such that its corresponding edgeweight exceeds the specified
-  #' threshold NOTE: attrname must be numeric (not categorical)
+  # statistic that adds the sum of attribute[i] and attribute[j] for all edges
+  # (i,j) such that its corresponding edgeweight exceeds the specified
+  # threshold NOTE: attrname must be numeric (not categorical)
   indx <- which(network > threshold | network == threshold, arr.ind = TRUE)
   stat <- 0
   for(i in 1:dim(indx)[1]){
@@ -210,11 +210,11 @@ nodecov = function(network, attrname, threshold){
 #-------------------------------------------------------
 
 nodefactor = function(attrname, base = 1){
-  #' adds several statistics where each statistic counts the number of instances
-  #' attrname takes a discrete (categorical) value. The base specifies which
-  #' categorical value should not be counted. For instance, base = 1, there will
-  #' be no statistic for the number of times 1 occurs. It is recommended to
-  #' avoid counting all values NOTE: attrname must be categorical (not numeric)
+  # adds several statistics where each statistic counts the number of instances
+  # attrname takes a discrete (categorical) value. The base specifies which
+  # categorical value should not be counted. For instance, base = 1, there will
+  # be no statistic for the number of times 1 occurs. It is recommended to
+  # avoid counting all values NOTE: attrname must be categorical (not numeric)
   attrname.factor <- as.factor(attrname)
   names <- unique(attrname.factor)
   num.vars <- length(unique(attrname.factor))
@@ -239,6 +239,30 @@ h <- function(possible.stats,
               together = together,
               GERGM_Object = GERGM_Object) {
   net <- GERGM_Object@observed_bounded_network
+  alphas <- GERGM_Object@weights
+  num.nodes <- GERGM_Object@num_nodes
+  statistics <- GERGM_Object@stats_to_use
+  triples = t(combn(1:num.nodes, 3))
+  temp <- c(out2star(net, triples, alphas[1], together),
+            in2star(net, triples, alphas[2], together),
+            ctriads(net, triples, alphas[3], together),
+            recip(net, alphas[4], together),
+            ttriads(net, triples, alphas[5], together),
+            edgeweight(net, alphas[6], together))
+  value <- temp[statistics > 0]
+  result <- rbind(round(value, 3), round(alphas[statistics > 0], 3))
+  colnames(result) <- possible.stats[statistics > 0]
+  rownames(result) <- c("value", "alpha")
+  return(result)
+}
+
+#h.corr for correlation matrices, we want to use the unbounded networks
+h.corr <- function(possible.stats,
+              alpha = NULL,
+              theta = NULL,
+              together = together,
+              GERGM_Object = GERGM_Object) {
+  net <- GERGM_Object@observed_network
   alphas <- GERGM_Object@weights
   num.nodes <- GERGM_Object@num_nodes
   statistics <- GERGM_Object@stats_to_use

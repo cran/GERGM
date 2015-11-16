@@ -8,7 +8,6 @@ MCMCMLE <- function(num.draws,
                     directed ,
                     method ,
                     shape.parameter ,
-                    take.sample.every ,
                     together ,
                     seed2 ,
                     gain.factor,
@@ -20,26 +19,50 @@ MCMCMLE <- function(num.draws,
   alphas <- GERGM_Object@weights
   cat("Estimating Initial Values for Theta via MPLE... \n")
   GERGM_Object <- store_console_output(GERGM_Object,"Estimating Initial Values for Theta via MPLE... \n")
-  theta.init <- mple(GERGM_Object@bounded.network,
-                     statistics = GERGM_Object@stats_to_use,
-                     directed = directed)
+
+  if(GERGM_Object@is_correlation_network){
+    theta.init <- mple.corr(GERGM_Object@network, GERGM_Object@bounded.network,
+                            statistics = GERGM_Object@stats_to_use,
+                            directed = directed)
+  }else{
+    theta.init <- mple(GERGM_Object@bounded.network,
+                       statistics = GERGM_Object@stats_to_use,
+                       directed = directed)
+  }
+
   cat("\nMPLE Thetas: ", theta.init$par, "\n")
   GERGM_Object <- store_console_output(GERGM_Object,paste("\nMPLE Thetas: ", theta.init$par, "\n"))
   num.nodes <- GERGM_Object@num_nodes
   triples <- t(combn(1:num.nodes, 3))
   pairs <- t(combn(1:num.nodes, 2))
-  # initialize the network with the observed network
-  initial_network <- GERGM_Object@bounded.network
-  # calculate the statistics of the original network
-  init.statistics <- h2(GERGM_Object@bounded.network,
-                        triples = triples,
-                        statistics = rep(1, length(possible.stats)),
-                        alphas = alphas, together = together)
-  obs.stats <- h2(GERGM_Object@bounded.network,
-                  triples = triples,
-                  statistics = GERGM_Object@stats_to_use,
-                  alphas = alphas,
-                  together = together)
+  if(GERGM_Object@is_correlation_network){
+    # initialize the network with the observed network
+    initial_network <- GERGM_Object@network
+    # calculate the statistics of the original network
+    init.statistics <- h2(GERGM_Object@network,
+                          triples = triples,
+                          statistics = rep(1, length(possible.stats)),
+                          alphas = alphas, together = together)
+    obs.stats <- h2(GERGM_Object@network,
+                    triples = triples,
+                    statistics = GERGM_Object@stats_to_use,
+                    alphas = alphas,
+                    together = together)
+  }else{
+    # initialize the network with the observed network
+    initial_network <- GERGM_Object@bounded.network
+    # calculate the statistics of the original network
+    init.statistics <- h2(GERGM_Object@bounded.network,
+                          triples = triples,
+                          statistics = rep(1, length(possible.stats)),
+                          alphas = alphas, together = together)
+    obs.stats <- h2(GERGM_Object@bounded.network,
+                    triples = triples,
+                    statistics = GERGM_Object@stats_to_use,
+                    alphas = alphas,
+                    together = together)
+  }
+
 
   #cat("Observed Values of Selected Statistics:", "\n", obs.stats, "\n")
   ####################################################################
@@ -92,8 +115,32 @@ MCMCMLE <- function(num.draws,
 
 
     #just use what gets returned
+#     if(GERGM_Object@is_correlation_network){
+#       #calculate the statistics on the correlation space
+#       temp <- GERGM_Object@MCMC_output$Networks
+#       num.nodes <- dim(temp)[1]
+#       for(i in 1:dim(temp)[3]){
+#         temp.net <- bounded.to.correlations((temp[, , i] + t(temp[, , i]))/2)
+#         if(i == 1){
+#           hsn <- h2(temp.net, triples = triples,
+#                     statistics = rep(1, 6),
+#                     alphas = alphas,
+#                     together = together)
+#         }
+#         if(i > 1){
+#           hsn <- rbind(hsn, h2(temp.net, triples = triples,
+#                                statistics = rep(1, 6),
+#                                alphas = alphas,
+#                                together = together))
+#         }
+#       }
+#       hsn.tot <- hsn
+#       hsn <- hsn[, which(statistics == 1)]
+#     }else{
+    # }
     hsn <- GERGM_Object@MCMC_output$Statistics[,which(statistics == 1)]
     hsn.tot <- GERGM_Object@MCMC_output$Statistics
+
     stats.data <- data.frame(Observed = init.statistics,
                              Simulated = colMeans(hsn.tot))
     rownames(stats.data) <- possible.stats
@@ -128,7 +175,7 @@ MCMCMLE <- function(num.draws,
     }
     cat("\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
     GERGM_Object <- store_console_output(GERGM_Object,"\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
-    cat(p.value, "\n \n")
+    cat(round(p.value,3), "\n \n")
     GERGM_Object <- store_console_output(GERGM_Object,paste(p.value, "\n \n"))
 
     if(max(abs(theta.new$par)) > 10000000){

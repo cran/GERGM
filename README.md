@@ -1,7 +1,7 @@
-# GERGM
+# GERGM [![Travis-CI Build Status](https://travis-ci.org/matthewjdenny/GERGM.svg?branch=master)](https://travis-ci.org/matthewjdenny/GERGM)
 An R package to estimate Generalized Exponential Random Graph Models
 
-NOTE: **This package is still under development and is very much a work in progress. Please do not use in any publication without express consent of the authors. PLEASE REPORT ANY BUGS OR ERRORS TO <mzd5530@psu.edu>**. 
+NOTE: **This package is still under development. PLEASE REPORT ANY BUGS OR ERRORS TO <mdenny@psu.edu>**. 
 
 ## Model Overview 
 
@@ -14,22 +14,25 @@ An R package which implements the Generalized Exponential Random Graph Model (GE
 
 ### Requirements for using C++ code with R
 
-See the **Requirements for using C++ code with R** section in the following tutorial: [Using C++ and R code Together with Rcpp](http://www.mjdenny.com/Rcpp_Intro.html).
+See the **Requirements for using C++ code with R** section in the following tutorial: [Using C++ and R code Together with Rcpp](http://www.mjdenny.com/Rcpp_Intro.html). You will likely need to install either `Xcode` or `Rtools` depending on whether you are using a Mac or Windows machine before you can use the package.
 
 ### Installing The Package
-  
-To install this package from Github, you will need to Hadley Wickham's devtools package installed.
+
+The easiest way to do this is to install the package from CRAN via the standard `install.packages` command:
+
+    install.packages("GERGM")
+
+This will take care of some weird compilation issues that can arise, and is the best option for most people. If you want the most current development version of the package (available here), you will need to start by making sure you have Hadley Wickham's devtools package installed.
 
     install.packages("devtools")
-    library("devtools")
     
 Now we can install from Github using the following line:
 
     devtools::install_github("matthewjdenny/GERGM")
 
-I have  had success installing with R 3.2.0+ installed but if you do not have the latest version of R installed, or run into some install errors (please email if you do), it should work as long as you install the dependencies first with the following block of code:
+I have had success installing this way on most major operating systems with R 3.2.0+ installed, but if you do not have the latest version of R installed, or run into some install errors (please email if you do), it should work as long as you install the dependencies first with the following block of code:
 
-    install.packages( pkgs = c("BH","RcppArmadillo","ggplot2","methods"), dependencies = TRUE)
+    install.packages( pkgs = c("BH","RcppArmadillo","ggplot2","methods","stringr"), dependencies = TRUE)
 
 Once the `GERGM` package is installed, you may access its functionality as you would any other package by calling:
 
@@ -120,4 +123,4 @@ If `output_name` is specified in the `gergm()` function, then five files will be
 
 ## Testing
             
-So far, this package has been tested successfully on OSX 10.9.5 and Windows 7. Please email me at <mzd5530@psu.edu> if you have success on another OS or run into any problems.
+So far, this package has been tested successfully on OSX 10.9.5 and Windows 7. Please email me at <mdenny@psu.edu> if you have success on another OS or run into any problems.

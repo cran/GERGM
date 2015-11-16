@@ -21,10 +21,10 @@ Estimate_GERGM <- function(formula_object,
                            force_x_theta_updates,
                            transformation_type) {
 
-  #' set the seed
+  # set the seed
   set.seed(seed)
 
-  #' set our exponential down weights
+  # set our exponential down weights
   alpha <- exponential_weights
 
   statistics <- GERGM_Object@stats_to_use
@@ -41,6 +41,11 @@ Estimate_GERGM <- function(formula_object,
     method = "Metropolis"
   }
 
+  if(method == "Gibbs" & GERGM_Object@is_correlation_network){
+    warning("Gibbs sampling is currently not implemented for correlation networks, switching to Metropolis Hastings.")
+    method = "Metropolis"
+  }
+
   # Flag if Metropolis is specified but Gibbs is OK
   if (method == "Metropolis" & sum(GERGM_Object@weights != 1) == 0) {
     warning(paste0("All statistics have second order derivative = 0.",
@@ -54,7 +59,7 @@ Estimate_GERGM <- function(formula_object,
     num.theta <- length(which(GERGM_Object@stats_to_use > 0))
     gpar <- list()
     gpar$par <- c(mean(c(GERGM_Object@network)),
-                  rep(0, dim(GERGM_Object@data_transformation)[3] -1),
+                  rep(0, dim(GERGM_Object@data_transformation)[3] - 1),
                   log(sd(c(GERGM_Object@network))))
     theta <- list()
     theta$par <- rep(0, num.theta)
@@ -80,9 +85,9 @@ Estimate_GERGM <- function(formula_object,
                           hessian = T,
                           control = list(fnscale = -1, trace = 6))
         cat("Lambda estimates", "\n")
-        GERGM_Object <- store_console_output(GERGM_Object,"Lambda estimates\n")
+        GERGM_Object <- store_console_output(GERGM_Object, "Lambda estimates\n")
         print(gpar.new$par)
-        GERGM_Object <- store_console_output(GERGM_Object,toString(gpar.new$par))
+        GERGM_Object <- store_console_output(GERGM_Object, toString(gpar.new$par))
         gpar.std.errors <- 1 / sqrt(abs(diag(gpar.new$hessian)))
         # Transform the unbounded weights to bounded weights via a t-distribution
         beta <- gpar.new$par[1:(length(gpar.new$par) - 1)]
@@ -113,10 +118,11 @@ Estimate_GERGM <- function(formula_object,
         cat("statistics", statistics, "\n")
         GERGM_Object <- store_console_output(GERGM_Object,paste("statistics", statistics, "\n"))
         theta.std.errors <- 1 / sqrt(abs(diag(theta.new$hessian)))
+        GERGM_Object@theta.par <- theta.new$par
 
         if(i > 1){
           # Stop if lambda and theta estimates converge
-          p.value1 <- rep(0,length(theta$par))
+          p.value1 <- rep(0, length(theta$par))
           count1 <- rep(0, length(theta$par))
           p.value2 <- rep(0, length(gpar$par))
           count2 <- rep(0, length(gpar$par))
@@ -195,7 +201,7 @@ Estimate_GERGM <- function(formula_object,
         pairs <- t(combn(1:num.nodes, 2))
 
         # Estimate theta
-        ret_list <- MCMCMLE( num.draws = nsim,
+        ret_list <- MCMCMLE(num.draws = nsim,
                              mc.num.iterations = mc.num.iterations,
                              thin = thin, MCMC.burnin = MCMC.burnin,
                              theta = theta$par,
@@ -284,17 +290,31 @@ Estimate_GERGM <- function(formula_object,
     theta$par <- rep(0, num.theta)
     num.nodes <- GERGM_Object@num_nodes
     if(MPLE.only == TRUE){
-      GERGM_Object@theta_estimation_converged <- TRUE
-      theta.new <- mple(GERGM_Object@bounded.network,
-                        statistics = GERGM_Object@stats_to_use,
-                        directed = directed)
-      theta.std.errors <- 1 / sqrt(abs(diag(theta.new$hessian)))
-      theta <- theta.new
+      ###
+      statistics <- GERGM_Object@stats_to_use
+      alphas <- GERGM_Object@weights
+      cat("Estimating Theta via MPLE... \n")
+      GERGM_Object <- store_console_output(GERGM_Object, "Estimating Theta via MPLE... \n")
+      if(GERGM_Object@is_correlation_network){
+        theta.init <- mple.corr(GERGM_Object@network, GERGM_Object@bounded.network,
+                                statistics = GERGM_Object@stats_to_use,
+                                directed = directed)
+      }else{
+        theta.init <- mple(GERGM_Object@bounded.network,
+                           statistics = GERGM_Object@stats_to_use,
+                           directed = directed)
+      }
+
+      #print(theta.init)
+      GERGM_Object <- store_console_output(GERGM_Object,paste("\nMPLE Thetas: ", theta.init$par, "\n"))
+      theta <- theta.init
       lambda <- as.data.frame(0)
+      theta.std.errors <- 1 / sqrt(abs(diag(theta.init$hessian)))
+      GERGM_Object@theta.par <- theta.init$par
     }
 
     if(MPLE.only != TRUE){
-      ret_list <- MCMCMLE( num.draws = nsim,
+      ret_list <- MCMCMLE(num.draws = nsim,
                            mc.num.iterations = mc.num.iterations,
                            thin = thin,
                            MCMC.burnin = MCMC.burnin,
