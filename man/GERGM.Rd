@@ -14,7 +14,8 @@ gergm(formula, covariate_data = NULL, normalization_type = c("log",
   downweight_statistics_together = TRUE, MCMC_burnin = 100, seed = 123,
   convergence_tolerance = 0.01, MPLE_gain_factor = 0,
   acceptable_fit_p_value_threshold = 0.05, force_x_theta_updates = 1,
-  output_directory = NULL, output_name = NULL, generate_plots = TRUE)
+  output_directory = NULL, output_name = NULL, generate_plots = TRUE,
+  using_correlation_network = FALSE)
 }
 \arguments{
 \item{formula}{A formula object that specifies the relationship between
@@ -125,6 +126,8 @@ ates.pdf", "Test_GERGM_Object.Rdata", "Test_Estimation_Log.txt", and
 
 \item{generate_plots}{Defaults to TRUE, if FALSE, then no diagnostic or
 parameter plots are generated.}
+
+\item{using_correlation_network}{Defaults to FALSE. Experimental.}
 }
 \value{
 A gergm object containing parameter estimates.
@@ -133,6 +136,7 @@ A gergm object containing parameter estimates.
 The main function provided by the package.
 }
 \examples{
+\dontrun{
 set.seed(12345)
 net <- matrix(rnorm(100,0,20),10,10)
 colnames(net) <- rownames(net) <- letters[1:10]
@@ -154,5 +158,6 @@ test <- gergm(formula,
               convergence_tolerance = 0.01,
               MPLE_gain_factor = 0,
               force_x_theta_update = 4)
+}
 }
 

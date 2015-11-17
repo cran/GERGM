@@ -88,8 +88,10 @@
 #' "Test_Trace_Plot.pdf"
 #' @param generate_plots Defaults to TRUE, if FALSE, then no diagnostic or
 #' parameter plots are generated.
+#' @param using_correlation_network Defaults to FALSE. Experimental.
 #' @return A gergm object containing parameter estimates.
 #' @examples
+#' \dontrun{
 #' set.seed(12345)
 #' net <- matrix(rnorm(100,0,20),10,10)
 #' colnames(net) <- rownames(net) <- letters[1:10]
@@ -111,6 +113,7 @@
 #'               convergence_tolerance = 0.01,
 #'               MPLE_gain_factor = 0,
 #'               force_x_theta_update = 4)
+#' }
 #' @export
 gergm <- function(formula,
                   covariate_data = NULL,
@@ -133,12 +136,13 @@ gergm <- function(formula,
                   force_x_theta_updates = 1,
                   output_directory = NULL,
                   output_name = NULL,
-                  generate_plots = TRUE
+                  generate_plots = TRUE,
+                  using_correlation_network = FALSE
                   ){
 
   # remove experimental support for correlation networks
   # @param using_correlation_network Defaults to FALSE. Experimental.
-  using_correlation_network = FALSE
+  # using_correlation_network = FALSE
 
   # This is the main function to estimate a GERGM model
 

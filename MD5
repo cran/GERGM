@@ -1,4 +1,4 @@
-363b2a08c6918fd9ebde9283c773b7be *DESCRIPTION
+d987a0bdf8c6dce3c7f9931e40537bd9 *DESCRIPTION
 b5c8460a2bee25852c31e82bf8c86854 *NAMESPACE
 c7de6e1d8e25df69f800d5aef8fddcd7 *R/Create_GERGM_Object.R
 5e936a3c18859fbef77e03b4869d2ca0 *R/Create_GERGM_Object_From_Formula.R
@@ -18,17 +18,17 @@ ddfe6a3cc7ec4acf34e8efd1aab25586 *R/Prepare_Covariates.R
 10f8189f17fa78766d4d0f4f740844fa *R/Simulate_GERGM.R
 f720c6976109c017150b88af672f8fc3 *R/Trace_Plot.R
 1c508113505f22c8324537d74d52f899 *R/Transform_Correlations.R
-fcc5287adea0717e55ac5d315a4e49b9 *R/gergm.R
+459b90893e2f41d10c10c5e8dc5353f4 *R/gergm.R
 bda0fbdb5d86b9e84ec7588b086adcb8 *R/plot_network.R
 aaafd7811739974a977dc112ed5cb3f0 *R/simulate_networks.R
 20e6784d93da44bf7547ecb2ac7724ef *README.md
 a864869f0802fc55f4c1bbb03e586f34 *man/Estimate_Plot.Rd
-e7114e8869986b3dd194750616d3b165 *man/GERGM.Rd
+e7baab52ea4aa2b4c8f14fbaf02af2c4 *man/GERGM.Rd
 5f7a25243f55172b866631061409652a *man/GOF.Rd
 95e979404fd9e9ffe637330a199f1ae7 *man/Trace_Plot.Rd
 62ed3bb1e8bc85edf4a24258087abaae *man/plot_network.Rd
 307757a83e1deeb5e7813362a40c6c1a *man/simulate_networks.Rd
-d60a900d448d4afc122e4a74bb008a32 *src/Makevars
+2a6f9e9e044a78154d3cfda5936d6f48 *src/Makevars
 cd4354c761ba160f618e65f7b26ea27f *src/Makevars.win
 dac7168b7dc70926a2b9aabae158e1ae *src/Metropolis_Hastings_Sampler.cpp
 ffbbd595758ace962a89a2e25057d3fd *src/RcppExports.cpp
