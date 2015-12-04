@@ -2,9 +2,7 @@
 #' @description The main function provided by the package.
 #'
 #' @param formula A formula object that specifies the relationship between
-#' statistics and the observed network. Currently, the following statistics can be
-#' specified: c("out2star", "in2star", 	"ctriads", "recip", "ttriads",
-#' "edgeweigt").
+#' statistics and the observed network. Currently, the user may specify a model using any combination of the following statistics: `out2stars(alpha = 1)`, `in2stars(alpha = 1)`, `ctriads(alpha = 1)`, `mutual(alpha = 1)`, `ttriads(alpha = 1)`, `edges(alpha = 1)`, `absdiff(covariate = "MyCov")`, `edgecov(covariate = "MyCov")`, `sender(covariate = "MyCov")`, `reciever(covariate = "MyCov")`, `nodefactor(covariate, base = "MyBase")`, `netcov(network)`. To use exponential downweighting for any of the network level terms, simply specify a value for alpha less than 1. The `(alpha = 1)` term may be omitted from the structural terms if no exponential downweighting is required. In this case, the terms may be provided as: `out2star`, `in2star`, `ctriads`, `recip`, `ttriads`, `edges`. If the network is undirected the user may only specify the following terms: `twostars(alpha = 1)`,  `ttriads(alpha = 1)`, `edges(alpha = 1)`, `absdiff(covariate = "MyCov")`, `edgecov(covariate = "MyCov")`, `sender(covariate = "MyCov")`, `nodefactor(covariate, base = "MyBase")`, `netcov(network)`.
 #' @param covariate_data A data frame containing node level covariates the user
 #' wished to transform into sender or reciever effects. It must have row names
 #' that match every entry in colnames(raw_network), should have descriptive
@@ -88,14 +86,13 @@
 #' "Test_Trace_Plot.pdf"
 #' @param generate_plots Defaults to TRUE, if FALSE, then no diagnostic or
 #' parameter plots are generated.
-#' @param using_correlation_network Defaults to FALSE. Experimental.
 #' @return A gergm object containing parameter estimates.
 #' @examples
 #' \dontrun{
 #' set.seed(12345)
 #' net <- matrix(rnorm(100,0,20),10,10)
 #' colnames(net) <- rownames(net) <- letters[1:10]
-#' formula <- net ~ recip + edges
+#' formula <- net ~ edges + mutual
 #'
 #' test <- gergm(formula,
 #'               normalization_type = "division",
@@ -112,7 +109,7 @@
 #'               seed = 456,
 #'               convergence_tolerance = 0.01,
 #'               MPLE_gain_factor = 0,
-#'               force_x_theta_update = 4)
+#'               force_x_theta_updates = 4)
 #' }
 #' @export
 gergm <- function(formula,
@@ -136,21 +133,29 @@ gergm <- function(formula,
                   force_x_theta_updates = 1,
                   output_directory = NULL,
                   output_name = NULL,
-                  generate_plots = TRUE,
-                  using_correlation_network = FALSE
+                  generate_plots = TRUE
                   ){
 
   # remove experimental support for correlation networks
   # @param using_correlation_network Defaults to FALSE. Experimental.
-  # using_correlation_network = FALSE
+  using_correlation_network = FALSE
 
   # This is the main function to estimate a GERGM model
 
   # hard coded possible stats
-  possible_structural_terms <- c("out2star", "in2star", "ctriads", "recip", "ttriads", "edges")
+  possible_structural_terms <- c("out2stars", "in2stars", "ctriads", "mutual", "ttriads", "edges")
+  possible_structural_terms_undirected <- c("twostars", "ttriads", "edges")
   possible_covariate_terms <- c("absdiff", "nodecov", "nodefactor", "sender", "receiver")
   possible_network_terms <- "netcov"
   possible_transformations <- c("cauchy", "logcauchy", "gaussian", "lognormal")
+
+  # check terms for undirected network
+  if(!network_is_directed){
+    formula <- parse_undirected_structural_terms(
+      formula,
+      possible_structural_terms,
+      possible_structural_terms_undirected)
+  }
 
   # set logical values for whether we are using MPLE only, whether the network
   # is directed, and which estimation method we are using as well as the
@@ -186,8 +191,7 @@ gergm <- function(formula,
   #make sure proposal variance is greater than zero
   if(proposal_variance <= 0.001){
     proposal_variance <- 0.001
-    cat("You supplied a proposal variance that was less than or equal to zero.
-        It has been reset to 0.001, considder respecifying...\n")
+    cat("You supplied a proposal variance that was less than or equal to zero. It has been reset to 0.001, considder respecifying...\n")
   }
 
   formula <- as.formula(formula)
@@ -318,7 +322,15 @@ gergm <- function(formula,
   triples <- t(combn(1:num.nodes, 3))
   pairs <- t(combn(1:num.nodes, 2))
 
+  # change back column names if we are dealing with an undirected network
+  if(!network_is_directed){
+    change <- which(colnames(GERGM_Object@theta.coef) == "in2star")
+    if(length(change) > 0){
+      colnames(GERGM_Object@theta.coef)[change] <- "twostars"
+    }
+  }
 
+  init.statistics <- NULL
   if(GERGM_Object@is_correlation_network){
     init.statistics <- h2(GERGM_Object@network,
                           triples = triples,
@@ -333,12 +345,14 @@ gergm <- function(formula,
                           together = downweight_statistics_together)
   }
   # initialize the network with the observed network
-  init.statistics <- h2(GERGM_Object@bounded.network,
-                        triples = triples,
-                        statistics = rep(1, length(possible_structural_terms)),
-                        alphas = GERGM_Object@weights,
-                        together = downweight_statistics_together)
+#   init.statistics <- h2(GERGM_Object@bounded.network,
+#                         triples = triples,
+#                         statistics = rep(1, length(possible_structural_terms)),
+#                         alphas = GERGM_Object@weights,
+#                         together = downweight_statistics_together)
 
+  # fix issue with the wrong stats being saved
+  GERGM_Object@stats[2,] <- init.statistics
   hsn.tot <- GERGM_Object@MCMC_output$Statistics
   #calculate t.test p-values for calculating the difference in the means of
   # the newly simulated data with the original network
@@ -373,21 +387,14 @@ gergm <- function(formula,
 
   if(min(acceptable_fit) > acceptable_fit_p_value_threshold){
     GERGM_Object@acceptable_fit <- TRUE
-    message("Parameter estimates simulate networks that are statistically
-            indistinguishable from observed network on the statistics specified
-            by the user. ")
-    GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates
-            simulate networks that are statistically indistinguishable from
-            observed network on the statistics specified by the user. ")
+    message("Parameter estimates simulate networks that are statistically indistinguishable from observed network on the statistics specified by the user. ")
+    GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates simulate networks that are statistically indistinguishable from observed network on the statistics specified by the user. ")
   }else{
     GERGM_Object@acceptable_fit <- FALSE
     message("Parameter estimates simulate networks that are statistically
             distinguishable from observed network. Consider respecifying on the
             statistics specified by the user.")
-    GERGM_Object <- store_console_output(GERGM_Object, "Parameter estimates
-            simulate networks that are statistically distinguishable from
-            observed network on the statistics specified by the user. Considder
-            respecifying.")
+    GERGM_Object <- store_console_output(GERGM_Object, "Parameter estimates simulate networks that are statistically distinguishable from observed network on the statistics specified by the user. Considder respecifying.")
   }
 
   # make GOF plot

@@ -43,6 +43,14 @@ dttriads <- function(i, j, net) {
   return(t2 + t3 + t4)
 }
 
+# dtriads (undirected)
+dtriads <- function(i, j, net){
+  nodes <- nrow(net)
+  others <- (1:nodes)[-c(i, j)]
+  triples <- cbind(i, j, others)
+  stat <- sum(net[triples[, c(2, 3)]] * net[triples[, c(1, 3)]])
+  return(stat)
+}
 
 
 # dh function weight w_{i,j} will be conditioned upon
@@ -121,16 +129,20 @@ net2xy <- function(net, statistics, directed) {
         x <- rbind(x, dh(net, statistics, i, j))
       }
     }
-
   }
   if (directed == FALSE) {
-    for (i in 2:nodes) {
-      for (j in (1:(i - 1))) {
+    for (i in 1:nodes) {
+      for (j in (1:nodes)[-i]) {
         y <- c(y, net[i, j])
         x <- rbind(x, dh(net, statistics, i, j))
       }
     }
-
+#     for (i in 2:nodes) {
+#       for (j in (1:(i - 1))) {
+#         y <- c(y, net[i, j])
+#         x <- rbind(x, dh(net, statistics, i, j))
+#       }
+#     }
   }
   return(list(y = y, x = x))
 }
@@ -202,11 +214,14 @@ parse_formula_term <- function(term,
                       covariate = NA,
                       base = NA,
                       network = NA,
+                      threshold = 0,
+                      levels = NA,
+                      parens_no_arg = NA,
                       network_matrix_object = NA,
                       num_levels = NA,
-                      levels = NA,
                       base_index = NA)
-  possible_fields <- c("term","alpha","covariate","base","network","levels","")
+  possible_fields <- c("term","alpha","covariate", "base", "network",
+                       "threshold", "levels", "")
   # if there is an argument to the term -- this will be a lazy implementation
   # where if you do not get the name right, it will simply not be set and a
   # warning will be thrown.
@@ -287,9 +302,17 @@ parse_formula_term <- function(term,
       }
       # check to make sure a valid network matrix is specified
       if(!is.na(return_list$network) & !is.null(return_list$network)){
-          return_list$network_matrix_object <- get(return_list$network)
+        temp_net <- mget(as.character(return_list$network),
+                         envir = environment(),
+                         ifnotfound = list(not_found = NA))
+        if(class(temp_net) == "list"){
+          temp_net <- mget(as.character(return_list$network),
+                           envir = globalenv(),
+                           ifnotfound = list(not_found = NA))
+        }
+          return_list$network_matrix_object <- temp_net[[1]]
         if(class(return_list$network_matrix_object)!= "matrix"){
-          stop("You must supply network covariates as matrix objects.")
+          stop(paste("You must supply network covariates as matrix objects."))
         }
       }else{
         stop(paste("The network covariate matrix:",return_list$network,"does not apprea to exist, please chec that it is loaded in your current R session."))

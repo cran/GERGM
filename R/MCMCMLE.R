@@ -31,7 +31,7 @@ MCMCMLE <- function(num.draws,
   }
 
   cat("\nMPLE Thetas: ", theta.init$par, "\n")
-  GERGM_Object <- store_console_output(GERGM_Object,paste("\nMPLE Thetas: ", theta.init$par, "\n"))
+  GERGM_Object <- store_console_output(GERGM_Object, paste("\nMPLE Thetas: ", theta.init$par, "\n"))
   num.nodes <- GERGM_Object@num_nodes
   triples <- t(combn(1:num.nodes, 3))
   pairs <- t(combn(1:num.nodes, 2))
@@ -66,8 +66,6 @@ MCMCMLE <- function(num.draws,
 
   #cat("Observed Values of Selected Statistics:", "\n", obs.stats, "\n")
   ####################################################################
-  ##JW: Added 3/29/15. This scales the initial estimates for the MPLE theta specification
-  ## This is according to the initialization the Fisher Scoring method for optimization
   alps <- alphas[which(statistics == 1)]
   GERGM_Object@reduced_weights <- alps
   GERGM_Object@theta.par <- theta.init$par
@@ -85,7 +83,14 @@ MCMCMLE <- function(num.draws,
   hsn <- GERGM_Object@MCMC_output$Statistics[,which(GERGM_Object@stats_to_use == 1)]
 
   #Calculate covariance estimate (to scale initial guess theta.init)
-  z.bar <- colSums(hsn) / 20
+  z.bar <- NULL
+  if(class(hsn) == "numeric"){
+    hsn <- matrix(hsn,ncol =1,nrow = length(hsn))
+    z.bar <- sum(hsn) / 20
+  }else{
+    z.bar <- colSums(hsn) / 20
+  }
+
   #cat("z.bar", "\n", z.bar, "\n")
   Cov.est <- 0
   for(i in 1:dim(hsn)[1]){
@@ -113,36 +118,19 @@ MCMCMLE <- function(num.draws,
                            seed1 = seed2,
                            possible.stats = possible.stats)
 
-
-    #just use what gets returned
-#     if(GERGM_Object@is_correlation_network){
-#       #calculate the statistics on the correlation space
-#       temp <- GERGM_Object@MCMC_output$Networks
-#       num.nodes <- dim(temp)[1]
-#       for(i in 1:dim(temp)[3]){
-#         temp.net <- bounded.to.correlations((temp[, , i] + t(temp[, , i]))/2)
-#         if(i == 1){
-#           hsn <- h2(temp.net, triples = triples,
-#                     statistics = rep(1, 6),
-#                     alphas = alphas,
-#                     together = together)
-#         }
-#         if(i > 1){
-#           hsn <- rbind(hsn, h2(temp.net, triples = triples,
-#                                statistics = rep(1, 6),
-#                                alphas = alphas,
-#                                together = together))
-#         }
-#       }
-#       hsn.tot <- hsn
-#       hsn <- hsn[, which(statistics == 1)]
-#     }else{
-    # }
     hsn <- GERGM_Object@MCMC_output$Statistics[,which(statistics == 1)]
     hsn.tot <- GERGM_Object@MCMC_output$Statistics
 
-    stats.data <- data.frame(Observed = init.statistics,
-                             Simulated = colMeans(hsn.tot))
+    # deal with case where we only have one statistic
+    if(class(hsn.tot) == "numeric"){
+      hsn.tot <- matrix(hsn.tot,ncol =1,nrow = length(hsn.tot))
+      stats.data <- data.frame(Observed = init.statistics,
+                               Simulated = mean(hsn.tot))
+    }else{
+      stats.data <- data.frame(Observed = init.statistics,
+                               Simulated = colMeans(hsn.tot))
+    }
+
     rownames(stats.data) <- possible.stats
     print(stats.data)
     GERGM_Object <- store_console_output(GERGM_Object,toString(stats.data))

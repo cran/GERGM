@@ -232,6 +232,22 @@ nodefactor = function(attrname, base = 1){
 
 #-------------------------------------------------------
 
+#undirected statistic for triads
+undirected_triads = function(net, triples, alpha = 1, together) {
+    if(together == 0){
+      stat <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha) *
+                  net[triples[, c(1, 3)]]^(alpha))
+      return(stat)
+    }
+    if(together == 1){
+      stat <- sum(net[triples[, c(1, 2)]] * net[triples[, c(2, 3)]] *
+                  net[triples[, c(1, 3)]])
+      return(stat^alpha)
+    }
+  }
+
+#-------------------------------------------------------
+
 # Calculate the statistics of a formula object
 h <- function(possible.stats,
               alpha = NULL,
@@ -240,6 +256,7 @@ h <- function(possible.stats,
               GERGM_Object = GERGM_Object) {
   net <- GERGM_Object@observed_bounded_network
   alphas <- GERGM_Object@weights
+  thresholds <- GERGM_Object@thresholds
   num.nodes <- GERGM_Object@num_nodes
   statistics <- GERGM_Object@stats_to_use
   triples = t(combn(1:num.nodes, 3))
@@ -264,6 +281,7 @@ h.corr <- function(possible.stats,
               GERGM_Object = GERGM_Object) {
   net <- GERGM_Object@observed_network
   alphas <- GERGM_Object@weights
+  thresholds <- GERGM_Object@thresholds
   num.nodes <- GERGM_Object@num_nodes
   statistics <- GERGM_Object@stats_to_use
   triples = t(combn(1:num.nodes, 3))
@@ -282,7 +300,19 @@ h.corr <- function(possible.stats,
 
 # A second version of the h function used for calculation in estimation
 # This function calculates the network statistics associated with net
-h2 <- function(net, triples, statistics, alphas = rep(1,6), together = 1) {
+h2 <- function(net,
+               triples,
+               statistics,
+               alphas = NULL,
+               together = 1,
+               directed = TRUE,
+               threshold = NULL) {
+  if(is.null(threshold)){
+    thresholds <- rep(0, length(statistics))
+  }
+  if(is.null(alphas)){
+    alphas <- rep(1,length(statistics))
+  }
   temp = c(out2star(net, triples, alphas[1], together),
            in2star(net, triples, alphas[2], together),
            ctriads(net, triples, alphas[3], together),

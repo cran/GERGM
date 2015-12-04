@@ -14,14 +14,11 @@ gergm(formula, covariate_data = NULL, normalization_type = c("log",
   downweight_statistics_together = TRUE, MCMC_burnin = 100, seed = 123,
   convergence_tolerance = 0.01, MPLE_gain_factor = 0,
   acceptable_fit_p_value_threshold = 0.05, force_x_theta_updates = 1,
-  output_directory = NULL, output_name = NULL, generate_plots = TRUE,
-  using_correlation_network = FALSE)
+  output_directory = NULL, output_name = NULL, generate_plots = TRUE)
 }
 \arguments{
 \item{formula}{A formula object that specifies the relationship between
-statistics and the observed network. Currently, the following statistics can be
-specified: c("out2star", "in2star",     "ctriads", "recip", "ttriads",
-"edgeweigt").}
+statistics and the observed network. Currently, the user may specify a model using any combination of the following statistics: `out2stars(alpha = 1)`, `in2stars(alpha = 1)`, `ctriads(alpha = 1)`, `mutual(alpha = 1)`, `ttriads(alpha = 1)`, `edges(alpha = 1)`, `absdiff(covariate = "MyCov")`, `edgecov(covariate = "MyCov")`, `sender(covariate = "MyCov")`, `reciever(covariate = "MyCov")`, `nodefactor(covariate, base = "MyBase")`, `netcov(network)`. To use exponential downweighting for any of the network level terms, simply specify a value for alpha less than 1. The `(alpha = 1)` term may be omitted from the structural terms if no exponential downweighting is required. In this case, the terms may be provided as: `out2star`, `in2star`, `ctriads`, `recip`, `ttriads`, `edges`. If the network is undirected the user may only specify the following terms: `twostars(alpha = 1)`,  `ttriads(alpha = 1)`, `edges(alpha = 1)`, `absdiff(covariate = "MyCov")`, `edgecov(covariate = "MyCov")`, `sender(covari}
 
 \item{covariate_data}{A data frame containing node level covariates the user
 wished to transform into sender or reciever effects. It must have row names
@@ -126,8 +123,6 @@ ates.pdf", "Test_GERGM_Object.Rdata", "Test_Estimation_Log.txt", and
 
 \item{generate_plots}{Defaults to TRUE, if FALSE, then no diagnostic or
 parameter plots are generated.}
-
-\item{using_correlation_network}{Defaults to FALSE. Experimental.}
 }
 \value{
 A gergm object containing parameter estimates.
@@ -140,7 +135,7 @@ The main function provided by the package.
 set.seed(12345)
 net <- matrix(rnorm(100,0,20),10,10)
 colnames(net) <- rownames(net) <- letters[1:10]
-formula <- net ~ recip + edges
+formula <- net ~ edges + mutual
 
 test <- gergm(formula,
               normalization_type = "division",
@@ -157,7 +152,7 @@ test <- gergm(formula,
               seed = 456,
               convergence_tolerance = 0.01,
               MPLE_gain_factor = 0,
-              force_x_theta_update = 4)
+              force_x_theta_updates = 4)
 }
 }
 
