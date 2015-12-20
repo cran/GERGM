@@ -13,11 +13,14 @@ MCMCMLE <- function(num.draws,
                     gain.factor,
 					          possible.stats,
 					          GERGM_Object,
-					          force_x_theta_updates) {
+					          force_x_theta_updates,
+					          verbose) {
 
   statistics <- GERGM_Object@stats_to_use
   alphas <- GERGM_Object@weights
-  cat("Estimating Initial Values for Theta via MPLE... \n")
+  if(verbose){
+    cat("Estimating Initial Values for Theta via MPLE... \n")
+  }
   GERGM_Object <- store_console_output(GERGM_Object,"Estimating Initial Values for Theta via MPLE... \n")
 
   if(GERGM_Object@is_correlation_network){
@@ -29,8 +32,9 @@ MCMCMLE <- function(num.draws,
                        statistics = GERGM_Object@stats_to_use,
                        directed = directed)
   }
-
-  cat("\nMPLE Thetas: ", theta.init$par, "\n")
+  if(verbose){
+    cat("\nMPLE Thetas: ", theta.init$par, "\n")
+  }
   GERGM_Object <- store_console_output(GERGM_Object, paste("\nMPLE Thetas: ", theta.init$par, "\n"))
   num.nodes <- GERGM_Object@num_nodes
   triples <- t(combn(1:num.nodes, 3))
@@ -69,41 +73,52 @@ MCMCMLE <- function(num.draws,
   alps <- alphas[which(statistics == 1)]
   GERGM_Object@reduced_weights <- alps
   GERGM_Object@theta.par <- theta.init$par
-  GERGM_Object@MCMC_output
-  GERGM_Object <- Simulate_GERGM(GERGM_Object,
-                         nsim = ceiling(20/thin),
-                         method = method,
-                         shape.parameter = shape.parameter,
-                         together = together,
-                         thin = thin,
-                         MCMC.burnin = MCMC.burnin,
-                         seed1 = seed2,
-                         possible.stats = possible.stats)
 
-  hsn <- GERGM_Object@MCMC_output$Statistics[,which(GERGM_Object@stats_to_use == 1)]
-
-  #Calculate covariance estimate (to scale initial guess theta.init)
-  z.bar <- NULL
-  if(class(hsn) == "numeric"){
-    hsn <- matrix(hsn,ncol =1,nrow = length(hsn))
-    z.bar <- sum(hsn) / 20
-  }else{
-    z.bar <- colSums(hsn) / 20
-  }
-
-  #cat("z.bar", "\n", z.bar, "\n")
-  Cov.est <- 0
-  for(i in 1:dim(hsn)[1]){
-    Cov.est <- matrix(as.numeric(hsn[i,]), ncol = 1) %*% t(matrix(as.numeric(hsn[i,]), ncol = 1)) + Cov.est
-  }
-  Cov.est <- (Cov.est / 20) - z.bar%*%t(z.bar)
-  #cat("Cov.est", "\n", Cov.est)
-  D.inv <- solve(Cov.est)
-  #calculate
+  # if we are not doing a fisher update
   theta <- list()
-  theta$par <- theta.init$par - gain.factor * D.inv %*% (z.bar - obs.stats)
-  cat("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n")
-  GERGM_Object <- store_console_output(GERGM_Object,paste("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n"))
+  theta$par <- theta.init$par
+
+  # if we are going to do a fisher update to MPLE thetas
+  if(gain.factor > 0){
+    GERGM_Object <- Simulate_GERGM(GERGM_Object,
+                                   nsim = ceiling(20/thin),
+                                   method = method,
+                                   shape.parameter = shape.parameter,
+                                   together = together,
+                                   thin = thin,
+                                   MCMC.burnin = MCMC.burnin,
+                                   seed1 = seed2,
+                                   possible.stats = possible.stats,
+                                   verbose = verbose)
+
+    hsn <- GERGM_Object@MCMC_output$Statistics[,which(GERGM_Object@stats_to_use == 1)]
+
+    #Calculate covariance estimate (to scale initial guess theta.init)
+    z.bar <- NULL
+    if(class(hsn) == "numeric"){
+      hsn <- matrix(hsn,ncol =1,nrow = length(hsn))
+      z.bar <- sum(hsn) / 20
+    }else{
+      z.bar <- colSums(hsn) / 20
+    }
+
+    #cat("z.bar", "\n", z.bar, "\n")
+    Cov.est <- 0
+    for(i in 1:dim(hsn)[1]){
+      Cov.est <- matrix(as.numeric(hsn[i,]), ncol = 1) %*% t(matrix(as.numeric(hsn[i,]), ncol = 1)) + Cov.est
+    }
+    Cov.est <- (Cov.est / 20) - z.bar%*%t(z.bar)
+    #cat("Cov.est", "\n", Cov.est)
+    D.inv <- solve(Cov.est)
+    #calculate
+    theta <- list()
+    theta$par <- theta.init$par - gain.factor * D.inv %*% (z.bar - obs.stats)
+    if(verbose){
+      cat("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n")
+    }
+    GERGM_Object <- store_console_output(GERGM_Object,paste("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n"))
+  }
+
   ##########################################################################
   ## Simulate new networks
   for (i in 1:mc.num.iterations) {
@@ -116,7 +131,8 @@ MCMCMLE <- function(num.draws,
                            thin = thin,
                            MCMC.burnin = MCMC.burnin,
                            seed1 = seed2,
-                           possible.stats = possible.stats)
+                           possible.stats = possible.stats,
+                           verbose = verbose)
 
     hsn <- GERGM_Object@MCMC_output$Statistics[,which(statistics == 1)]
     hsn.tot <- GERGM_Object@MCMC_output$Statistics
@@ -132,10 +148,14 @@ MCMCMLE <- function(num.draws,
     }
 
     rownames(stats.data) <- possible.stats
+    cat("Simulated (averages) and observed network statistics...\n")
     print(stats.data)
     GERGM_Object <- store_console_output(GERGM_Object,toString(stats.data))
-    cat("\nOptimizing Theta Estimates... \n")
+    if(verbose){
+      cat("\nOptimizing theta estimates... \n")
+    }
     GERGM_Object <- store_console_output(GERGM_Object,"\nOptimizing Theta Estimates... \n")
+    if(verbose){
     theta.new <- optim(par = theta$par,
                        log.l,
                        alpha = GERGM_Object@reduced_weights,
@@ -146,8 +166,23 @@ MCMCMLE <- function(num.draws,
                        GERGM_Object = GERGM_Object,
                        method = "BFGS",
                        hessian = T,
-                       control = list(fnscale = -1, trace = 5))
-    cat("\n", "Theta Estimates: ", paste0(theta.new$par,collapse = " "), "\n",sep = "")
+                       control = list(fnscale = -1, trace = 6))
+    }else{
+      theta.new <- optim(par = theta$par,
+                         log.l,
+                         alpha = GERGM_Object@reduced_weights,
+                         hsnet = hsn,
+                         ltheta = as.numeric(theta$par),
+                         together = together,
+                         possible.stats= possible.stats,
+                         GERGM_Object = GERGM_Object,
+                         method = "BFGS",
+                         hessian = T,
+                         control = list(fnscale = -1, trace = 0))
+    }
+    if(verbose){
+      cat("\n", "Theta Estimates: ", paste0(theta.new$par,collapse = " "), "\n",sep = "")
+    }
     GERGM_Object <- store_console_output(GERGM_Object,paste("\n", "Theta Estimates: ", paste0(theta.new$par,collapse = " "), "\n",sep = ""))
     theta.std.errors <- 1 / sqrt(abs(diag(theta.new$hessian)))
     # Calculate the p-value based on a z-test of differences
@@ -161,9 +196,13 @@ MCMCMLE <- function(num.draws,
       #if we reject any of the tests then convergence has not been reached!
       if(p.value[j] < tolerance){count[j] = 1}
     }
-    cat("\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
+    if(verbose){
+      cat("\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
+    }
     GERGM_Object <- store_console_output(GERGM_Object,"\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
-    cat(round(p.value,3), "\n \n")
+    if(verbose){
+      cat(round(p.value,3), "\n \n")
+    }
     GERGM_Object <- store_console_output(GERGM_Object,paste(p.value, "\n \n"))
 
     if(max(abs(theta.new$par)) > 10000000){
@@ -175,12 +214,16 @@ MCMCMLE <- function(num.draws,
     if (sum(count) == 0){
       #conditional to check and see if we are requiring a second update
       if(i >= force_x_theta_updates){
-        message("Parameter estimates have converged")
+        if(verbose){
+          message("Parameter estimates have converged")
+        }
         GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates have converged")
         GERGM_Object@theta_estimation_converged <- TRUE
         return(list(theta.new,GERGM_Object))
       }else{
-        message(paste("Forcing",force_x_theta_updates,"iterations of theta updates..."),sep = " ")
+        if(verbose){
+          message(paste("Forcing",force_x_theta_updates,"iterations of theta updates..."),sep = " ")
+        }
         GERGM_Object <- store_console_output(GERGM_Object,paste("Forcing",force_x_theta_updates,"iterations of theta updates..."))
       }
     }
