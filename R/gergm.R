@@ -117,6 +117,17 @@
 #' running). Can be set to FALSE if the user wishes to see less output.
 #' @param omit_intercept_term Defualts to FALSE, can be set to TRUE if the
 #' user wishes to omit the model intercept term.
+#' @param hyperparameter_optimization Logical indicating whether automatic
+#' hyperparameter optimization should be used. Defaults to FALSE. If TRUE, then
+#' the algorithm will automatically seek to find an optimal burnin and number of
+#' networks to simulate, and if using Metropolis Hasings, will attempt to select
+#' a proposal variance that leads to a acceptance rate within +-0.05 of
+#' target_accept_rate. Furthermore, if degeneracy is detected, the algorithm
+#' will attempt to adress the issue automatically. WARNING: This feature is
+#' experimental, and may greatly increase runtime. Please monitor console
+#' output!
+#' @param target_accept_rate The target Metropolis Hastings acceptance rate.
+#' Defaults to 0.25
 #' @param ... Optional arguments, currently unsupported.
 #' @return A gergm object containing parameter estimates.
 #' @examples
@@ -167,44 +178,48 @@ gergm <- function(formula,
                   generate_plots = TRUE,
                   verbose = TRUE,
                   omit_intercept_term = FALSE,
+                  hyperparameter_optimization = FALSE,
+                  target_accept_rate = 0.25,
                   ...
                   ){
 
-  # remove experimental support for correlation networks
-  # @param using_correlation_network Defaults to FALSE. Experimental.
-  # pass in experimental correlation network feature through elipsis
+  # pass in experimental features through elipsis
   using_correlation_network = FALSE
   object <- as.list(substitute(list(...)))[-1L]
-  if(length(object) > 0){
-    if(!is.null(object$using_correlation_network)){
-      if(object$using_correlation_network){
+  if (length(object) > 0) {
+    if (!is.null(object$using_correlation_network)) {
+      if (object$using_correlation_network) {
         using_correlation_network <- TRUE
         cat("Using experimental correlation network feature...\n")
       }
     }
   }
 
-  # This is the main function to estimate a GERGM model
-
   # hard coded possible stats
-  possible_structural_terms <- c("out2stars", "in2stars", "ctriads", "mutual", "ttriads", "edges")
-  possible_structural_terms_undirected <- c("twostars", "ttriads")
-  possible_covariate_terms <- c("absdiff", "nodecov", "nodematch", "sender", "receiver", "intercept", "nodemix")
+  possible_structural_terms <- c("out2stars",
+                                 "in2stars",
+                                 "ctriads",
+                                 "mutual",
+                                 "ttriads",
+                                 "edges")
+  possible_structural_terms_undirected <- c("edges",
+                                            "twostars",
+                                            "ttriads")
+  possible_covariate_terms <- c("absdiff",
+                                "nodecov",
+                                "nodematch",
+                                "sender",
+                                "receiver",
+                                "intercept",
+                                "nodemix")
   possible_network_terms <- "netcov"
-  possible_transformations <- c("cauchy", "logcauchy", "gaussian", "lognormal")
-
-  #check for an edges statistic
-  form<- as.formula(formula)
-  parsed <- deparse(form)
-  if(length(parsed) > 1){
-    parsed <- paste0(parsed, collapse = " ")
-  }
-  if(grepl("edges",parsed)){
-    stop("You may not specify an edges statistic.")
-  }
+  possible_transformations <- c("cauchy",
+                                "logcauchy",
+                                "gaussian",
+                                "lognormal")
 
   # check terms for undirected network
-  if(!network_is_directed){
+  if (!network_is_directed) {
     formula <- parse_undirected_structural_terms(
       formula,
       possible_structural_terms,
@@ -212,8 +227,17 @@ gergm <- function(formula,
   }
 
   # automatically add an intercept term unless omit_intercept_term is TRUE
-  if(!omit_intercept_term){
+  if (!omit_intercept_term) {
     formula <- add_intercept_term(formula)
+    #check for an edges statistic
+    form <- as.formula(formula)
+    parsed <- deparse(form)
+    if (length(parsed) > 1) {
+      parsed <- paste0(parsed, collapse = " ")
+    }
+    if (grepl("edges",parsed)) {
+      stop("You may not specify an edges statistic if omit_intercept_term == FALSE as this will introduce two identical intercept terms and instability in the model. An intercept term is automatically added in the lambda transformation step unless omit_intercept_term == TRUE, and we have found this method of adding an intercept to be less prone to degeneracy.")
+    }
   }
 
   # set logical values for whether we are using MPLE only, whether the network
@@ -227,28 +251,22 @@ gergm <- function(formula,
   normalization_type <- normalization_type[1]
 
   # if we are using a correlation network, then the network must be undirected.
-  if(using_correlation_network){
+  if (using_correlation_network) {
     network_is_directed <- FALSE
   }
 
-  if(is.null(output_directory) & !is.null(output_name)){
+  if (is.null(output_directory) & !is.null(output_name)) {
     stop("You have specified an output file name but no output directory. Please
          specify both or neither.")
   }
 
-  if(length(which(possible_transformations %in% transformation_type  == T)) != 1){
+  if (length(which(possible_transformations %in% transformation_type  == T)) != 1) {
     stop("You have specified a transformation that is not recognized. Please
          specify one of: Cauchy, LogCauchy, Gaussian, or LogNormal")
   }
-  # convert logical to numeric indicator
-  if(downweight_statistics_together){
-    downweight_statistics_together <- 1
-  }else{
-    downweight_statistics_together <- 0
-  }
 
   #make sure proposal variance is greater than zero
-  if(proposal_variance <= 0.001){
+  if (proposal_variance <= 0.001) {
     proposal_variance <- 0.001
     cat("You supplied a proposal variance that was less than or equal to zero. It has been reset to 0.001, considder respecifying...\n")
   }
@@ -267,12 +285,10 @@ gergm <- function(formula,
      is_directed = network_is_directed)
 
   data_transformation <- NULL
-  if(!is.null(Transformed_Data$transformed_covariates)){
+  if (!is.null(Transformed_Data$transformed_covariates)) {
     data_transformation <- Transformed_Data$transformed_covariates
   }
-  #print(dim(data_transformation))
   gpar.names <- c(Transformed_Data$gpar.names, "dispersion")
-  #print(gpar.names)
 
   #1. Create GERGM object from network
 
@@ -296,91 +312,77 @@ gergm <- function(formula,
   GERGM_Object@observed_network  <- GERGM_Object@network
   GERGM_Object@observed_bounded_network <- GERGM_Object@bounded.network
   GERGM_Object@simulation_only <- FALSE
+  GERGM_Object@transformation_type <- transformation_type
+  GERGM_Object@downweight_statistics_together <- downweight_statistics_together
+  GERGM_Object@directed_network <- network_is_directed
 
-  if(network_is_directed){
-    GERGM_Object@undirected_network <- FALSE
-  }else{
-    GERGM_Object@undirected_network <- TRUE
-  }
 
-  if(!is.null(data_transformation)){
+  if (!is.null(data_transformation)) {
     GERGM_Object@data_transformation <- data_transformation
   }
 
-  if(is.null(output_name)){
+  if (is.null(output_name)) {
     GERGM_Object@print_output <- FALSE
   }else{
     GERGM_Object@print_output <- TRUE
   }
 
   # if we are using a correlation network then set field to TRUE.
-  if(using_correlation_network){
-    GERGM_Object@is_correlation_network <- TRUE
-  }else{
-    GERGM_Object@is_correlation_network <- FALSE
-  }
+  GERGM_Object@is_correlation_network <- using_correlation_network
+
+
+  # set adaptive metropolis parameters
+  GERGM_Object@hyperparameter_optimization <- hyperparameter_optimization
+  GERGM_Object@target_accept_rate <- target_accept_rate
+  GERGM_Object@proposal_variance <- proposal_variance
+  GERGM_Object@estimation_method <- estimation_method
+  GERGM_Object@number_of_simulations <- number_of_networks_to_simulate
+  GERGM_Object@thin <- thin
+  GERGM_Object@burnin <- MCMC_burnin
+  GERGM_Object@MPLE_gain_factor <- MPLE_gain_factor
 
   #2. Estimate GERGM
   GERGM_Object <- Estimate_GERGM(formula,
-                                 directed = network_is_directed,
                                  MPLE.only = use_MPLE_only,
-                                 transform.data = data_transformation,
-                                 method = estimation_method,
                                  max.num.iterations = maximum_number_of_lambda_updates,
                                  mc.num.iterations = maximum_number_of_theta_updates,
-                                 nsim = number_of_networks_to_simulate,
-                                 thin = thin,
-                                 shape.parameter = proposal_variance,
-                                 exponential_weights = GERGM_Object@weights,
-                                 together = downweight_statistics_together,
-                                 MCMC.burnin = MCMC_burnin,
                                  seed = seed,
                                  tolerance = convergence_tolerance,
-                                 gain.factor = MPLE_gain_factor,
                                  possible.stats = possible_structural_terms,
                                  GERGM_Object = GERGM_Object,
                                  force_x_theta_updates = force_x_theta_updates,
-                                 transformation_type = transformation_type,
                                  verbose = verbose,
                                  force_x_lambda_updates = force_x_lambda_updates)
 
   #3. Perform degeneracy diagnostics and create GOF plots
-  if(!GERGM_Object@theta_estimation_converged){
-    warning("Estimation proceedure did not detect convergence in Theta estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergencecriterion.")
-    GERGM_Object <- store_console_output(GERGM_Object,"Estimation proceedure did not detect convergence in Theta estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
+  if (!GERGM_Object@theta_estimation_converged) {
+    warning("Estimation procedure did not detect convergence in Theta estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
+    GERGM_Object <- store_console_output(GERGM_Object,"Estimation procedure did not detect convergence in Theta estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
   }
-  if(!GERGM_Object@lambda_estimation_converged){
-    warning("Estimation proceedure did not detect convergence in Lambda estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
-    GERGM_Object <- store_console_output(GERGM_Object,"Estimation proceedure did not detect convergence in Lambda estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
+  if (!GERGM_Object@lambda_estimation_converged) {
+    warning("Estimation procedure did not detect convergence in Lambda estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
+    GERGM_Object <- store_console_output(GERGM_Object,"Estimation procedure did not detect convergence in Lambda estimates. Estimation halted when maximum number of updates was reached. Be careful to assure good model fit or select a more relaxed convergence criterion.")
   }
 
   #now simulate from last update of theta parameters
   GERGM_Object <- Simulate_GERGM(GERGM_Object,
-                                 nsim = number_of_networks_to_simulate,
-                                 method = estimation_method,
-                                 MCMC.burnin = MCMC_burnin,
-                                 thin = thin,
-                                 shape.parameter = proposal_variance,
-                                 together = downweight_statistics_together,
                                  seed1 = seed,
                                  possible.stats = possible_structural_terms)
 
-  #which(GERGM_Object@stats_to_use == 1)
   colnames(GERGM_Object@lambda.coef) = gpar.names
   num.nodes <- GERGM_Object@num_nodes
   triples <- t(combn(1:num.nodes, 3))
-  pairs <- t(combn(1:num.nodes, 2))
 
   # change back column names if we are dealing with an undirected network
-  if(!network_is_directed){
+  if (!network_is_directed) {
     change <- which(colnames(GERGM_Object@theta.coef) == "in2stars")
-    if(length(change) > 0){
+    if (length(change) > 0) {
       colnames(GERGM_Object@theta.coef)[change] <- "twostars"
     }
   }
 
   init.statistics <- NULL
-  if(GERGM_Object@is_correlation_network){
+  if (GERGM_Object@is_correlation_network) {
     init.statistics <- h2(GERGM_Object@network,
                           triples = triples,
                           statistics = rep(1, length(possible_structural_terms)),
@@ -398,13 +400,16 @@ gergm <- function(formula,
   GERGM_Object@stats[2,] <- init.statistics
   hsn.tot <- GERGM_Object@MCMC_output$Statistics
 
+  # save these statistics so we can make GOF plots in the future, otherwise
+  # they would be the transformed statistics which would produce poor GOF plots.
+  GERGM_Object@simulated_statistics_for_GOF <- hsn.tot
   #thin statsitics
   hsn.tot <- Thin_Statistic_Samples(hsn.tot)
 
   #calculate t.test p-values for calculating the difference in the means of
   # the newly simulated data with the original network
   statistic_test_p_values <- rep(NA,length(possible_structural_terms))
-  for(i in 1:length(possible_structural_terms)){
+  for (i in 1:length(possible_structural_terms)) {
     statistic_test_p_values[i] <- round(t.test(hsn.tot[, i],
                                       mu = init.statistics[i])$p.value,3)
   }
@@ -431,21 +436,21 @@ gergm <- function(formula,
   #test to see if we have an acceptable fit
   acceptable_fit <- statistic_test_p_values[which(GERGM_Object@stats_to_use == 1), 1]
 
-  if(min(acceptable_fit) > acceptable_fit_p_value_threshold){
+  if (min(acceptable_fit) > acceptable_fit_p_value_threshold) {
     GERGM_Object@acceptable_fit <- TRUE
     message("Parameter estimates simulate networks that are statistically indistinguishable from observed network on the statistics specified by the user. ")
     GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates simulate networks that are statistically indistinguishable from observed network on the statistics specified by the user. ")
   }else{
     GERGM_Object@acceptable_fit <- FALSE
-    message("Parameter estimates simulate networks that are statistically distinguishable from observed network. Check GOF plots to determine if the model provides a reasonalbe fit . This is a very stringent test for goodness of fit, so results may still be acceptable even if this criterion is not met.")
-    GERGM_Object <- store_console_output(GERGM_Object, "Parameter estimates simulate networks that are statistically distinguishable from observed network. Check GOF plots to determine if the model provides a reasonalbe fit . This is a very stringent test for goodness of fit, so results may still be acceptable even if this criterion is not met.")
+    message("Parameter estimates simulate networks that are statistically distinguishable from observed network. Check GOF plots to determine if the model provides a reasonable fit . This is a very stringent test for goodness of fit, so results may still be acceptable even if this criterion is not met.")
+    GERGM_Object <- store_console_output(GERGM_Object, "Parameter estimates simulate networks that are statistically distinguishable from observed network. Check GOF plots to determine if the model provides a reasonable fit . This is a very stringent test for goodness of fit, so results may still be acceptable even if this criterion is not met.")
   }
 
   #4. output everything to the appropriate files and return GERGM object.
-  if(generate_plots){
+  if (generate_plots) {
     # only generate output if output_name is not NULL
-    if(!is.null(output_name)){
-      if(is.null(output_directory)){
+    if (!is.null(output_name)) {
+      if (is.null(output_directory)) {
         output_directory <- getwd()
       }
       current_directory <- getwd()
@@ -481,8 +486,7 @@ gergm <- function(formula,
 
   # transform networks back to observed scale
   cat("Transforming networks simulated via MCMC as part of the fit diagnostics back on to the scale of observed network. You can access these networks through the '@MCMC_output$Networks' field returned by this function...\n")
-  GERGM_Object <- Convert_Simulated_Networks_To_Observed_Scale(GERGM_Object,
-    transformation_type)
+  GERGM_Object <- Convert_Simulated_Networks_To_Observed_Scale(GERGM_Object)
 
   return(GERGM_Object)
 }

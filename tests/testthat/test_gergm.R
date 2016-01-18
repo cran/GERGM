@@ -2,7 +2,7 @@ test_that("Simple model with no covariates runs", {
   skip_on_cran()
   ########################### 1. No Covariates #############################
   # Preparing an unbounded network without covariates for gergm estimation #
-  skip("Skipping test as it can only be run in the global environment.")
+  #skip("Skipping test as it can only be run in the global environment.")
 
   set.seed(12345)
   net <- matrix(rnorm(100,0,20),10,10)
@@ -17,7 +17,7 @@ test_that("Simple model with no covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 40000,
-                thin = 1/10,
+                thin = 1/40,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 10000,
@@ -26,7 +26,7 @@ test_that("Simple model with no covariates runs", {
                 MPLE_gain_factor = 0,
                 force_x_theta_updates = 4)
 
-  check_against <- c(-0.076)
+  check_against <- c(-0.086)
   expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
   # three parameter model
@@ -38,7 +38,7 @@ test_that("Simple model with no covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 40000,
-                thin = 1/10,
+                thin = 1/40,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 10000,
@@ -47,7 +47,7 @@ test_that("Simple model with no covariates runs", {
                 MPLE_gain_factor = 0,
                 force_x_theta_updates = 4)
 
-  check_against <- c(2.034, -0.236)
+  check_against <- c(2.061, -0.253)
   expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
   # five parameter model
@@ -59,7 +59,7 @@ test_that("Simple model with no covariates runs", {
               use_MPLE_only = FALSE,
               estimation_method = "Metropolis",
               number_of_networks_to_simulate = 40000,
-              thin = 1/10,
+              thin = 1/40,
               proposal_variance = 0.5,
               downweight_statistics_together = TRUE,
               MCMC_burnin = 10000,
@@ -68,7 +68,7 @@ test_that("Simple model with no covariates runs", {
               MPLE_gain_factor = 0,
               force_x_theta_updates = 4)
 
-check_against <- c(-0.611,  2.692,  0.122)
+check_against <- c(-0.606,  2.483,  0.131)
 expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
 #check that code works for undirected network
@@ -81,7 +81,7 @@ test <- gergm(formula,
               use_MPLE_only = FALSE,
               estimation_method = "Metropolis",
               number_of_networks_to_simulate = 40000,
-              thin = 1/10,
+              thin = 1/40,
               proposal_variance = 0.5,
               downweight_statistics_together = TRUE,
               MCMC_burnin = 10000,
@@ -89,6 +89,9 @@ test <- gergm(formula,
               convergence_tolerance = 0.01,
               MPLE_gain_factor = 0,
               force_x_theta_updates = 4)
+
+check_against <- c(-0.222,  0.079)
+expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
 #check that code works with MPLE only
 
@@ -100,7 +103,7 @@ test <- gergm(formula,
               use_MPLE_only = TRUE,
               estimation_method = "Metropolis",
               number_of_networks_to_simulate = 40000,
-              thin = 1/10,
+              thin = 1/40,
               proposal_variance = 0.5,
               downweight_statistics_together = TRUE,
               MCMC_burnin = 10000,
@@ -110,13 +113,13 @@ test <- gergm(formula,
               force_x_theta_updates = 2,
               force_x_lambda_updates = 3)
 
+check_against <- c(-0.610,  0.226)
+expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
+
 })
 
 test_that("Model with covariates runs", {
   skip_on_cran()
-  print(environment())
-
-  skip("Skipping test as it can only be run in the global environment.")
 
   set.seed(12345)
   net <- matrix(runif(100,0,1),10,10)
@@ -135,7 +138,7 @@ test_that("Model with covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 100000,
-                thin = 1/10,
+                thin = 1/100,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 50000,
@@ -143,6 +146,9 @@ test_that("Model with covariates runs", {
                 convergence_tolerance = 0.01,
                 MPLE_gain_factor = 0,
                 force_x_theta_updates = 2)
+
+  check_against <- c(0.798, -0.070, -0.016, -0.025, -0.024, -0.056, -0.056, -0.035,  0.002, -0.040, -0.050,  3.072,  0.128, -1.932)
+  expect_equal(c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3)), check_against)
 
   formula <- net ~ mutual + ttriads + sender("Age") +
     netcov("network_covariate") + nodematch("Type")
@@ -153,7 +159,7 @@ test_that("Model with covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 100000,
-                thin = 1/10,
+                thin = 1/100,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 50000,
@@ -161,5 +167,8 @@ test_that("Model with covariates runs", {
                 convergence_tolerance = 0.01,
                 MPLE_gain_factor = 0,
                 force_x_theta_updates = 2)
+
+  check_against <- c(1.438, -0.083, -0.017, -0.024,  3.103,  0.132, -1.837)
+  expect_equal(c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3)), check_against)
 
 })

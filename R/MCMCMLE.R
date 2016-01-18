@@ -1,135 +1,58 @@
-MCMCMLE <- function(num.draws,
-                    mc.num.iterations,
+MCMCMLE <- function(mc.num.iterations,
                     tolerance,
-                    thin = 1,
-                    MCMC.burnin,
-                    theta = NULL,
-                    alpha = NULL,
-                    directed ,
-                    method ,
-                    shape.parameter ,
-                    together ,
+                    theta,
                     seed2 ,
-                    gain.factor,
 					          possible.stats,
 					          GERGM_Object,
 					          force_x_theta_updates,
 					          verbose) {
 
-  statistics <- GERGM_Object@stats_to_use
-  alphas <- GERGM_Object@weights
-  if(verbose){
-    cat("Estimating Initial Values for Theta via MPLE... \n")
-  }
-  GERGM_Object <- store_console_output(GERGM_Object,"Estimating Initial Values for Theta via MPLE... \n")
+  # get MPLE thetas
+  MPLE_Results <- run_mple(GERGM_Object = GERGM_Object,
+                           verbose = verbose,
+                           seed2 = seed2,
+                           possible.stats = possible.stats)
 
-  if(GERGM_Object@is_correlation_network){
-    theta.init <- mple.corr(GERGM_Object@network, GERGM_Object@bounded.network,
-                            statistics = GERGM_Object@stats_to_use,
-                            directed = directed)
-  }else{
-    theta.init <- mple(GERGM_Object@bounded.network,
-                       statistics = GERGM_Object@stats_to_use,
-                       directed = directed)
-  }
-  if(verbose){
-    cat("\nMPLE Thetas: ", theta.init$par, "\n")
-  }
-  GERGM_Object <- store_console_output(GERGM_Object, paste("\nMPLE Thetas: ", theta.init$par, "\n"))
-  num.nodes <- GERGM_Object@num_nodes
-  triples <- t(combn(1:num.nodes, 3))
-  pairs <- t(combn(1:num.nodes, 2))
-  if(GERGM_Object@is_correlation_network){
-    # initialize the network with the observed network
-    initial_network <- GERGM_Object@network
-    # calculate the statistics of the original network
-    init.statistics <- h2(GERGM_Object@network,
-                          triples = triples,
-                          statistics = rep(1, length(possible.stats)),
-                          alphas = alphas, together = together)
-    obs.stats <- h2(GERGM_Object@network,
-                    triples = triples,
-                    statistics = GERGM_Object@stats_to_use,
-                    alphas = alphas,
-                    together = together)
-  }else{
-    # initialize the network with the observed network
-    initial_network <- GERGM_Object@bounded.network
-    # calculate the statistics of the original network
-    init.statistics <- h2(GERGM_Object@bounded.network,
-                          triples = triples,
-                          statistics = rep(1, length(possible.stats)),
-                          alphas = alphas, together = together)
-    obs.stats <- h2(GERGM_Object@bounded.network,
-                    triples = triples,
-                    statistics = GERGM_Object@stats_to_use,
-                    alphas = alphas,
-                    together = together)
-  }
-
-
-  #cat("Observed Values of Selected Statistics:", "\n", obs.stats, "\n")
-  ####################################################################
-  alps <- alphas[which(statistics == 1)]
-  GERGM_Object@reduced_weights <- alps
-  GERGM_Object@theta.par <- theta.init$par
-
-  # if we are not doing a fisher update
-  theta <- list()
-  theta$par <- theta.init$par
-
-  # if we are going to do a fisher update to MPLE thetas
-  if(gain.factor > 0){
-    GERGM_Object <- Simulate_GERGM(GERGM_Object,
-                                   nsim = ceiling(20/thin),
-                                   method = method,
-                                   shape.parameter = shape.parameter,
-                                   together = together,
-                                   thin = thin,
-                                   MCMC.burnin = MCMC.burnin,
-                                   seed1 = seed2,
-                                   possible.stats = possible.stats,
-                                   verbose = verbose)
-
-    hsn <- GERGM_Object@MCMC_output$Statistics[,which(GERGM_Object@stats_to_use == 1)]
-
-    #Calculate covariance estimate (to scale initial guess theta.init)
-    z.bar <- NULL
-    if(class(hsn) == "numeric"){
-      hsn <- matrix(hsn,ncol =1,nrow = length(hsn))
-      z.bar <- sum(hsn) / 20
-    }else{
-      z.bar <- colSums(hsn) / 20
-    }
-
-    #cat("z.bar", "\n", z.bar, "\n")
-    Cov.est <- 0
-    for(i in 1:dim(hsn)[1]){
-      Cov.est <- matrix(as.numeric(hsn[i,]), ncol = 1) %*% t(matrix(as.numeric(hsn[i,]), ncol = 1)) + Cov.est
-    }
-    Cov.est <- (Cov.est / 20) - z.bar%*%t(z.bar)
-    #cat("Cov.est", "\n", Cov.est)
-    D.inv <- solve(Cov.est)
-    #calculate
-    theta <- list()
-    theta$par <- theta.init$par - gain.factor * D.inv %*% (z.bar - obs.stats)
-    if(verbose){
-      cat("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n")
-    }
-    GERGM_Object <- store_console_output(GERGM_Object,paste("Adjusted Initial Thetas After Fisher Update:",theta$par, "\n\n"))
-  }
+  GERGM_Object <- MPLE_Results$GERGM_Object
+  theta <- MPLE_Results$theta
+  statistics <- MPLE_Results$statistics
+  init.statistics <- MPLE_Results$init.statistics
 
   ##########################################################################
   ## Simulate new networks
+  FIX_DEGENERACY <- FALSE
   for (i in 1:mc.num.iterations) {
+
+    if (FIX_DEGENERACY) {
+      MPLE_Results <- run_mple(GERGM_Object = GERGM_Object,
+                               verbose = verbose,
+                               seed2 = seed2,
+                               possible.stats = possible.stats)
+
+      GERGM_Object <- MPLE_Results$GERGM_Object
+      theta <- MPLE_Results$theta
+      statistics <- MPLE_Results$statistics
+      init.statistics <- MPLE_Results$init.statistics
+      FIX_DEGENERACY <- FALSE
+    }
     GERGM_Object@theta.par <- as.numeric(theta$par)
+
+    # now optimize the proposal variance if we are using Metropolis Hasings
+    if (GERGM_Object@hyperparameter_optimization){
+      if (GERGM_Object@estimation_method == "Metropolis") {
+        GERGM_Object@proposal_variance <- Optimize_Proposal_Variance(
+          GERGM_Object = GERGM_Object,
+          seed2 = seed2,
+          possible.stats = possible.stats,
+          verbose = verbose)
+        cat("Proposal variance optimization complete! Proposal variance is:",
+            GERGM_Object@proposal_variance,"\n",
+            "--------- END HYPERPARAMETER OPTIMIZATION ---------",
+            "\n\n")
+      }
+    }
+
     GERGM_Object <- Simulate_GERGM(GERGM_Object,
-                           nsim = num.draws,
-                           method = method,
-                           shape.parameter = shape.parameter,
-                           together = together,
-                           thin = thin,
-                           MCMC.burnin = MCMC.burnin,
                            seed1 = seed2,
                            possible.stats = possible.stats,
                            verbose = verbose)
@@ -161,7 +84,7 @@ MCMCMLE <- function(num.draws,
                        alpha = GERGM_Object@reduced_weights,
                        hsnet = hsn,
                        ltheta = as.numeric(theta$par),
-                       together = together,
+                       together = GERGM_Object@downweight_statistics_together,
                        possible.stats= possible.stats,
                        GERGM_Object = GERGM_Object,
                        method = "BFGS",
@@ -173,7 +96,7 @@ MCMCMLE <- function(num.draws,
                          alpha = GERGM_Object@reduced_weights,
                          hsnet = hsn,
                          ltheta = as.numeric(theta$par),
-                         together = together,
+                         together = GERGM_Object@downweight_statistics_together,
                          possible.stats= possible.stats,
                          GERGM_Object = GERGM_Object,
                          method = "BFGS",
@@ -205,31 +128,128 @@ MCMCMLE <- function(num.draws,
     }
     GERGM_Object <- store_console_output(GERGM_Object,paste(p.value, "\n \n"))
 
-    if(max(abs(theta.new$par)) > 10000000){
-      message("Parameter estimates appear to have become degenerate, returning previous thetas. Model output should not be trusted. Try specifying a larger number of simulations or a different parameterization.")
-      GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates appear to have become degenerate, returning previous thetas. Model output should not be trusted. Try specifying a larger number of simulations or a different parameterization.")
-      return(list(theta.new,GERGM_Object))
-    }
+    # calculate MCMC chain convergence diagnostic
+    geweke_stat <- as.numeric(coda::geweke.diag(hsn.tot$edges)$z)
+    cat("MCMC convergence Geweke test statistic:",geweke_stat,
+        "\n(If the absolute value is greater than 1.7, increase MCMC_burnin)\n")
+    GERGM_Object <- store_console_output(GERGM_Object,
+      paste("MCMC convergence Geweke test statistic:",geweke_stat,
+      "\n(If the absolute value is greater than 1.7, increase MCMC_burnin)\n"))
 
-    if (sum(count) == 0){
-      #conditional to check and see if we are requiring a second update
-      if(i >= force_x_theta_updates){
-        if(verbose){
-          message("Parameter estimates have converged")
+    allow_convergence <- TRUE
+    if(max(abs(theta.new$par)) > 10000000){
+      if(GERGM_Object@hyperparameter_optimization){
+        message("Parameter estimates appear to have become degenerate, attempting to fix the problem...")
+        GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates appear to have become degenerate, attempting to fix the problem...")
+        # do not allow convergence
+        allow_convergence <- FALSE
+        # If we are using Metropolis Hastings, then try reducing weights and
+        # upping the gain factor
+        if (GERGM_Object@estimation_method == "Metropolis") {
+          GERGM_Object@weights <- 0.9 * GERGM_Object@weights
+          cat("Reducing exponential weights by 10 percent to:",
+              GERGM_Object@weights,
+              "in an attempt to address degeneracy issue...\n")
+          GERGM_Object <- store_console_output(GERGM_Object,paste(
+            "Reducing exponential weights by 10 percent to:",
+            GERGM_Object@weights,
+            "in an attempt to address degeneracy issue..."))
+
+          if (GERGM_Object@MPLE_gain_factor == 0) {
+            GERGM_Object@MPLE_gain_factor <- 0.05
+          } else {
+            GERGM_Object@MPLE_gain_factor <- 1.05 * GERGM_Object@MPLE_gain_factor
+          }
+          cat("Increasing MPLE gain factor by 5 percent percent to:",
+              GERGM_Object@MPLE_gain_factor,
+              "as exponential weights have decreased...\n")
+          GERGM_Object <- store_console_output(GERGM_Object,paste(
+            "Increasing MPLE gain factor by 5 percent percent to:",
+            GERGM_Object@MPLE_gain_factor,
+            "as exponential weights have decreased..."))
+          # re-estimate thetas with more downweighting
+          FIX_DEGENERACY <- TRUE
         }
-        GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates have converged")
-        GERGM_Object@theta_estimation_converged <- TRUE
-        return(list(theta.new,GERGM_Object))
+        # additionally, try doubling the burin and the number of MCMC iterations.
+        old_nsim <- GERGM_Object@number_of_simulations
+        old_burinin <- GERGM_Object@burnin
+        new_nsim <- 2 * old_nsim
+        new_burnin <- 2 * old_burinin
+        GERGM_Object@number_of_simulations <- new_nsim
+        GERGM_Object@burnin <- new_burnin
+        cat("Doubling burnin from:", old_burinin, "to", new_burnin,
+            "and number of networks simulated from:", old_nsim, "to", new_nsim,
+            "in an attempt to address degeneracy issue...\n")
+        GERGM_Object <- store_console_output(GERGM_Object,paste(
+          "Doubling burnin from:", old_burinin, "to", new_burnin,
+          "and number of networks simulated from:", old_nsim, "to", new_nsim,
+          "in an attempt to address degeneracy issue..."))
       }else{
-        if(verbose){
-          message(paste("Forcing",force_x_theta_updates,"iterations of theta updates..."),sep = " ")
-        }
-        GERGM_Object <- store_console_output(GERGM_Object,paste("Forcing",force_x_theta_updates,"iterations of theta updates..."))
+        message("Parameter estimates appear to have become degenerate, returning previous thetas. Model output should not be trusted. Try specifying a larger number of simulations or a different parameterization.")
+        GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates appear to have become degenerate, returning previous thetas. Model output should not be trusted. Try specifying a larger number of simulations or a different parameterization.")
+        return(list(theta.new,GERGM_Object))
+      }
+    } else if (abs(geweke_stat) > 1.7){
+      # if model was not degenerate but Geweke statistics say it did not converge
+      # double number of iterations and burnin automatically.
+      if (GERGM_Object@hyperparameter_optimization){
+        old_nsim <- GERGM_Object@number_of_simulations
+        old_burinin <- GERGM_Object@burnin
+        new_nsim <- 2 * old_nsim
+        new_burnin <- 2 * old_burinin
+        GERGM_Object@number_of_simulations <- new_nsim
+        GERGM_Object@burnin <- new_burnin
+        cat("Doubling burnin from:", old_burinin, "to", new_burnin,
+            "and number of networks simulated from:", old_nsim, "to", new_nsim,
+            "in an attempt to address degeneracy issue...\n")
+        GERGM_Object <- store_console_output(GERGM_Object,paste(
+          "Doubling burnin from:", old_burinin, "to", new_burnin,
+          "and number of networks simulated from:", old_nsim, "to", new_nsim,
+          "in an attempt to address degeneracy issue..."))
+        # do not allow convergence
+        allow_convergence <- FALSE
       }
     }
-    #cat("\n", "Theta Estimates", theta.new$par, "\n",sep = "")
-    theta <- theta.new
-    GERGM_Object@theta.par <- as.numeric(theta$par)
-  }
+
+
+
+    # check to see if we had a zero percent accept rate if using MH, and if so,
+    # then adjust proposal variance and try again -- do not signal convergence.
+    if (GERGM_Object@estimation_method == "Metropolis") {
+      if (GERGM_Object@MCMC_output$Acceptance.rate == 0){
+        old <- GERGM_Object@proposal_variance
+        new <- old/2
+        cat("Acceptance rate was zero, decreasing proposal variance from",old,
+            "to",new,"and simulating a new set of networks...\n")
+        GERGM_Object@proposal_variance <- new
+        allow_convergence <- FALSE
+      }
+    }
+    if (allow_convergence) {
+      if (sum(count) == 0){
+        #conditional to check and see if we are requiring more updates
+        if(i >= force_x_theta_updates){
+          if(verbose){
+            message("Parameter estimates have converged")
+          }
+          GERGM_Object <- store_console_output(GERGM_Object,
+                            "Parameter estimates have converged")
+          GERGM_Object@theta_estimation_converged <- TRUE
+          return(list(theta.new,GERGM_Object))
+        }else{
+          if(verbose){
+            message(paste("Forcing",force_x_theta_updates,
+                          "iterations of theta updates..."),sep = " ")
+          }
+          GERGM_Object <- store_console_output(GERGM_Object,paste("Forcing",
+                            force_x_theta_updates,
+                            "iterations of theta updates..."))
+        }
+      }
+      # only updat parameter estimates if we had an acceptance rate greater than zero
+      theta <- theta.new
+      GERGM_Object@theta.par <- as.numeric(theta$par)
+    }
+  } #loop over MCMC outer iterations
   return(list(theta.new,GERGM_Object))
 }
