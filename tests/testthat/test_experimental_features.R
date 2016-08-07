@@ -10,7 +10,7 @@ test_that("Hyperparameter optimization works", {
   rownames(node_level_covariates) <- letters[1:10]
   network_covariate <- net + matrix(rnorm(100,0,.5),10,10)
 
-  formula <- net ~ mutual + ttriads + sender("Age") +
+  formula <- net ~ edges + mutual + ttriads + sender("Age") +
     netcov("network_covariate") + nodematch("Type",base = "A")
 
   test <- gergm(formula,
@@ -30,66 +30,79 @@ test_that("Hyperparameter optimization works", {
                 hyperparameter_optimization = TRUE
                 )
 
-  check_against <- c(1.288, -0.075, -0.017, -0.025,  3.127, 0.132, -1.837)
+  check_against <- c(1.485, -0.085, -0.017, -0.023,  3.093,  0.133, -1.836)
   check <- c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3))
   expect_equal(check, check_against)
 
 })
 
-
-
-
-
-test_that("Model works for correlation networks", {
+test_that("parallel threading works", {
   skip_on_cran()
-  skip("Skipping test as it can only be run in the global environment.")
-
+  skip("We should not do threading on Travis")
   set.seed(12345)
-  #Function to generating a random positive-definite matrix with user-specified positive
-  #eigenvalues
-  # If eigenvalues are not specified, they are generated from a uniform
-  #distribution
+  net <- matrix(runif(400,0,1),20,20)
+  colnames(net) <- rownames(net) <- letters[1:20]
+  node_level_covariates <- data.frame(Age = c(25,30,34,27,36,39,27,28,35,40,
+                                              27,56,45,35,24,89,56,45,34,64),
+                                      Height = c(70,70,67,58,65,67,64,74,76,80,
+                                                 60,67,68,69,46,56,67,78,67,77),
+                                      Type = c("A","B","B","A","A","A","B","B","C","C",
+                                               "A","A","A","B","B","B","C","C","C","C"))
+  rownames(node_level_covariates) <- letters[1:20]
+  network_covariate <- net + matrix(rnorm(400,0,.5),20,20)
 
-  Posdef <- function (n, ev = runif(n, 0, 10))
-  {
-    Z <- matrix(ncol=n, rnorm(n^2))
-    decomp <- qr(Z)
-    Q <- qr.Q(decomp)
-    R <- qr.R(decomp)
-    d <- diag(R)
-    ph <- d / abs(d)
-    O <- Q %*% diag(ph)
-    Z <- t(O) %*% diag(ev) %*% O
-    return(Z)
-  }
+  formula <- net ~ edges + mutual + ttriads + sender("Age") +
+    netcov("network_covariate") + nodematch("Type",base = "A")
 
-  #Generate a random correlation matrix of dimension 10 x 10
-  x <- rnorm(10)
+  system.time({
+    test <- gergm(formula,
+                  covariate_data = node_level_covariates,
+                  network_is_directed = TRUE,
+                  use_MPLE_only = FALSE,
+                  estimation_method = "Metropolis",
+                  number_of_networks_to_simulate = 10000,
+                  thin = 1/100,
+                  proposal_variance = 0.1,
+                  downweight_statistics_together = TRUE,
+                  MCMC_burnin = 50000,
+                  seed = 456,
+                  convergence_tolerance = 0.01,
+                  MPLE_gain_factor = 0,
+                  force_x_theta_updates = 1,
+                  hyperparameter_optimization = TRUE
+    )
+  })
+  # user  system elapsed
+  # 55.405   0.337  59.661
 
-  pdmat <- Posdef(n = 10)
-  correlations <- pdmat / max(abs(pdmat))
-  diag(correlations) <- 1
-  net <- (correlations + t(correlations)) / 2
-  colnames(net) <- rownames(net) <- letters[1:10]
+  system.time({
+    test2 <- gergm(formula,
+                  covariate_data = node_level_covariates,
+                  network_is_directed = TRUE,
+                  use_MPLE_only = FALSE,
+                  estimation_method = "Metropolis",
+                  number_of_networks_to_simulate = 10000,
+                  thin = 1/100,
+                  proposal_variance = 0.1,
+                  downweight_statistics_together = TRUE,
+                  MCMC_burnin = 50000,
+                  seed = 456,
+                  convergence_tolerance = 0.01,
+                  MPLE_gain_factor = 0,
+                  force_x_theta_updates = 1,
+                  hyperparameter_optimization = TRUE,
+                  parallel = TRUE,
+                  cores = 2
+    )
+  })
+  # user  system elapsed
+  # 76.571   3.051  62.325
 
-  formula <- net ~ edges + ttriads
 
-  test <- gergm(formula,
-                normalization_type = "division",
-                network_is_directed = FALSE,
-                use_MPLE_only = FALSE,
-                estimation_method = "Metropolis",
-                number_of_networks_to_simulate = 40000,
-                thin = 1/10,
-                proposal_variance = 0.03,
-                downweight_statistics_together = TRUE,
-                MCMC_burnin = 10000,
-                seed = 456,
-                convergence_tolerance = 0.01,
-                MPLE_gain_factor = 0,
-                force_x_theta_updates = 4,
-                force_x_lambda_updates = 2,
-                using_correlation_network = TRUE,
-                omit_intercept_term = TRUE)
+
+  check <- c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3))
+  check2 <- c(round(as.numeric(test2@theta.coef[1,]),3),round(as.numeric(test2@lambda.coef[1,]),3))
+  expect_equal(check, check2)
 
 })
+

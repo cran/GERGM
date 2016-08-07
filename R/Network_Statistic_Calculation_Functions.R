@@ -3,9 +3,9 @@
 # Statistics out2stars
 out2star <- function(net, triples, alpha = 1, together = together) {
   if(together == 0){
-    st1 <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(1, 3)]]^(alpha))
-    st2 <- sum(net[triples[, c(2, 1)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha))
-    st3 <- sum(net[triples[, c(3, 1)]]^(alpha) * net[triples[, c(3, 2)]]^(alpha))
+    st1 <- sum(net[triples[, c(1, 2)]]^alpha * net[triples[, c(1, 3)]]^alpha)
+    st2 <- sum(net[triples[, c(2, 1)]]^alpha * net[triples[, c(2, 3)]]^alpha)
+    st3 <- sum(net[triples[, c(3, 1)]]^alpha * net[triples[, c(3, 2)]]^alpha)
     return(st1 + st2 + st3)
   }
   if(together == 1){
@@ -20,9 +20,9 @@ out2star <- function(net, triples, alpha = 1, together = together) {
 # in2stars
 in2star <- function(net, triples, alpha = 1, together = together) {
   if(together == 0){
-    st1 <- sum(net[triples[, c(3, 1)]]^(alpha) * net[triples[, c(2, 1)]]^(alpha))
-    st2 <- sum(net[triples[, c(3, 2)]]^(alpha) * net[triples[, c(1, 2)]]^(alpha))
-    st3 <- sum(net[triples[, c(1, 3)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha))
+    st1 <- sum(net[triples[, c(3, 1)]]^alpha * net[triples[, c(2, 1)]]^alpha)
+    st2 <- sum(net[triples[, c(3, 2)]]^alpha * net[triples[, c(1, 2)]]^alpha)
+    st3 <- sum(net[triples[, c(1, 3)]]^alpha * net[triples[, c(2, 3)]]^alpha)
     return(st1 + st2 + st3)
   }
   if(together == 1){
@@ -37,18 +37,18 @@ in2star <- function(net, triples, alpha = 1, together = together) {
 # transitive triads
 ttriads <- function(net, triples, alpha = 1, together) {
   if(together == 0){
-    t2 <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha) *
-                net[triples[, c(1, 3)]]^(alpha))
-    t3 <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(3, 2)]]^(alpha) *
-                net[triples[, c(3, 1)]]^(alpha))
-    t4 <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(3, 2)]]^(alpha) *
-                net[triples[, c(1, 3)]]^(alpha))
-    t5 <- sum(net[triples[, c(2, 1)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha) *
-                net[triples[, c(3, 1)]]^(alpha))
-    t6 <- sum(net[triples[, c(2, 1)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha) *
-                net[triples[, c(1, 3)]]^(alpha))
-    t7 <- sum(net[triples[, c(2, 1)]]^(alpha) * net[triples[, c(3, 2)]]^(alpha) *
-                net[triples[, c(3, 1)]]^(alpha))
+    t2 <- sum(net[triples[, c(1, 2)]]^alpha * net[triples[, c(2, 3)]]^alpha *
+                net[triples[, c(1, 3)]]^alpha)
+    t3 <- sum(net[triples[, c(1, 2)]]^alpha * net[triples[, c(3, 2)]]^alpha *
+                net[triples[, c(3, 1)]]^alpha)
+    t4 <- sum(net[triples[, c(1, 2)]]^alpha * net[triples[, c(3, 2)]]^alpha *
+                net[triples[, c(1, 3)]]^alpha)
+    t5 <- sum(net[triples[, c(2, 1)]]^alpha * net[triples[, c(2, 3)]]^alpha *
+                net[triples[, c(3, 1)]]^alpha)
+    t6 <- sum(net[triples[, c(2, 1)]]^alpha * net[triples[, c(2, 3)]]^alpha *
+                net[triples[, c(1, 3)]]^alpha)
+    t7 <- sum(net[triples[, c(2, 1)]]^alpha * net[triples[, c(3, 2)]]^alpha *
+                net[triples[, c(3, 1)]]^alpha)
     return(t2 + t3 + t4 + t5 + t6 + t7)
   }
   if(together == 1){
@@ -72,10 +72,10 @@ ttriads <- function(net, triples, alpha = 1, together) {
 # cyclic triads
 ctriads <- function(net, triples, alpha = 1, together) {
   if(together == 0){
-    t1 <- sum(net[triples[, c(1, 2)]]^(alpha) * net[triples[, c(2, 3)]]^(alpha) *
-                net[triples[, c(3, 1)]]^(alpha))
-    t8 <- sum(net[triples[, c(2, 1)]] * net[triples[, c(3, 2)]] *
-                net[triples[, c(1, 3)]]^(alpha))
+    t1 <- sum(net[triples[, c(1, 2)]]^alpha * net[triples[, c(2, 3)]]^alpha *
+                net[triples[, c(3, 1)]]^alpha)
+    t8 <- sum(net[triples[, c(2, 1)]]^alpha * net[triples[, c(3, 2)]]^alpha *
+                net[triples[, c(1, 3)]]^alpha)
     return(t1 + t8)
   }
   if(together == 1){
@@ -92,10 +92,10 @@ ctriads <- function(net, triples, alpha = 1, together) {
 recip <- function(net, alpha = 1, together) {
   pairs <- t(combn(1:nrow(net), 2))
   if(together == 0){
-    return(sum(net[pairs]^(alpha) * net[pairs[, c(2, 1)]]^(alpha)))
+    return(sum(net[pairs]^alpha * net[pairs[, c(2, 1)]]^alpha))
   }
   if(together == 1){
-    return(sum(net[pairs] * net[pairs[, c(2, 1)]])^(alpha))
+    return(sum(net[pairs] * net[pairs[, c(2, 1)]])^alpha)
   }
 }
 
@@ -104,10 +104,10 @@ recip <- function(net, alpha = 1, together) {
 edgeweight <- function(net, alpha = 1, together) {
   pairs <- t(combn(1:nrow(net), 2))
   if(together == 0){
-    return(sum((net[pairs]^(alpha) + net[pairs[, c(2, 1)]])^(alpha)))
+    return(sum(net[pairs]^alpha + net[pairs[, c(2, 1)]]^alpha))
   }
   if(together == 1){
-    return(sum((net[pairs] + net[pairs[, c(2, 1)]]))^(alpha))
+    return(sum((net[pairs] + net[pairs[, c(2, 1)]]))^alpha)
   }
 }
 

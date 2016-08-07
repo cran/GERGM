@@ -5,7 +5,10 @@
 \title{Plots of value-edged networks.}
 \usage{
 plot_network(sociomatrix, threshold = 0.5, save_pdf = FALSE,
-  pdf_name = "Test.pdf", output_directory = "./")
+  pdf_name = "Test.pdf", output_directory = "./",
+  comparison_network = NULL, comparison_names = NULL, seed = NULL,
+  white_background = FALSE, show_legend = TRUE, title = "",
+  identical_node_positions = FALSE)
 }
 \arguments{
 \item{sociomatrix}{A square numeric matrix (socimatrix) with real valued edges
@@ -23,6 +26,30 @@ include a ".pdf" extension.}
 
 \item{output_directory}{The directory where the user would like to output the
 PDF if save_pdf == TRUE.}
+
+\item{comparison_network}{An optional argument providing a second square
+numeric matrix (socimatrix) with real valued edges '(no NA's) to be visually
+compared to sociomatrix. The second network will be Procrustes transformed so
+that it appears most similar without chaning hte relativel positions of
+nodes. Defualts to NULL.}
+
+\item{comparison_names}{An optional string vector of length two providing
+titles for each of the two networks to be compared. Defaults to NULL.}
+
+\item{seed}{Optional argument to set the seed for the network layout
+algorithm so that plots look the same across multiple runs. Defaults to NULL
+but can be a positive integer (eg. 12345).}
+
+\item{white_background}{Defaults to FALSE. If TRUE, then network is plotted
+on a white background with black lettering.}
+
+\item{show_legend}{Logical indicating whether a legend with extremal edge
+values should be shown. Defualts to TRUE.}
+
+\item{title}{The title we wish to give our plot.}
+
+\item{identical_node_positions}{Logical indicating whether node positions
+should be fixed to be the same when comparing networks. Defualts to FALSE.}
 }
 \description{
 Generates a visualization of a value-edged network.

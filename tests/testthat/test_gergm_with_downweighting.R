@@ -1,8 +1,7 @@
-test_that("Simple model with no covariates runs", {
+test_that("That gergm with exponential downweighting works", {
   skip_on_cran()
   ########################### 1. No Covariates #############################
   # Preparing an unbounded network without covariates for gergm estimation #
-  skip("Skipping test as it can only be run in the global environment.")
 
   set.seed(12345)
   net <- matrix(rnorm(100,0,20),10,10)
@@ -10,7 +9,7 @@ test_that("Simple model with no covariates runs", {
 
 
   # three parameter model
-  formula <- net ~  mutual(0.95) +  ttriads(0.95)
+  formula <- net ~  edges + mutual(0.95) +  ttriads(0.95)
 
   test <- gergm(formula,
                 normalization_type = "division",
@@ -18,22 +17,22 @@ test_that("Simple model with no covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 40000,
-                thin = 1/10,
+                thin = 1/40,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 10000,
                 seed = 456,
-                convergence_tolerance = 0.01,
+                convergence_tolerance = 0.5,
                 MPLE_gain_factor = 0.05,
-                force_x_theta_updates = 4)
+                force_x_theta_updates = 1)
 
-  check_against <- c(2.519, -0.325)
+  check_against <- c(2.267, -0.311)
   expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
 
   #check that code works for undirected network
 
-  formula <- net ~  ttriads(alpha = 0.9) + twostars(0.9)
+  formula <- net ~  edges + ttriads(alpha = 0.9) + twostars(0.9)
 
   test <- gergm(formula,
                 normalization_type = "division",
@@ -41,15 +40,17 @@ test_that("Simple model with no covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 40000,
-                thin = 1/10,
+                thin = 1/40,
                 proposal_variance = 0.5,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 10000,
                 seed = 456,
-                convergence_tolerance = 0.01,
+                convergence_tolerance = 0.5,
                 MPLE_gain_factor = 0.08,
-                force_x_theta_updates = 4)
+                force_x_theta_updates = 1)
 
+  check_against <- c(0.192, -0.477)
+  expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
 
   set.seed(12345)
   net <- matrix(runif(100,0,1),10,10)
@@ -59,7 +60,7 @@ test_that("Simple model with no covariates runs", {
                                       Type = c("A","B","B","A","A","A","B","B","C","C"))
   rownames(node_level_covariates) <- letters[1:10]
   network_covariate <- net + matrix(rnorm(100,0,.5),10,10)
-  formula <- net ~ mutual(0.95) + ttriads(0.95) + sender("Age") +
+  formula <- net ~ edges + mutual(0.95) + ttriads(0.95) + sender("Age") +
     netcov("network_covariate") + nodemix("Type",base = "A")
 
   test <- gergm(formula,
@@ -68,17 +69,77 @@ test_that("Simple model with no covariates runs", {
                 use_MPLE_only = FALSE,
                 estimation_method = "Metropolis",
                 number_of_networks_to_simulate = 100000,
-                thin = 1/10,
-                proposal_variance = 0.5,
+                thin = 1/100,
+                proposal_variance = 0.1,
                 downweight_statistics_together = TRUE,
                 MCMC_burnin = 50000,
                 seed = 456,
-                convergence_tolerance = 0.01,
+                convergence_tolerance = 0.5,
                 MPLE_gain_factor = 0.05,
-                force_x_theta_updates = 2)
+                force_x_theta_updates = 1)
 
-#   check_against <- c(1.118, -0.138, -0.021, -0.044, -0.040,  3.639, 0.102, -1.880)
-#   check <- c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3))
-#   expect_equal(check, check_against)
+    check_against <- c(0.949, -0.093, -0.016, -0.026, -0.024, -0.056, -0.055,
+                       -0.035,  0.002, -0.040, -0.050,  3.067,  0.129, -1.931)
+    check <- c(round(as.numeric(test@theta.coef[1,]),3),round(as.numeric(test@lambda.coef[1,]),3))
+    expect_equal(check, check_against)
+
+})
+
+
+
+test_that("That weighted MPLE works", {
+  skip_on_cran()
+  ########################### 1. No Covariates #############################
+  # Preparing an unbounded network without covariates for gergm estimation #
+
+  set.seed(12345)
+  net <- matrix(rnorm(100,0,20),10,10)
+  colnames(net) <- rownames(net) <- letters[1:10]
+
+
+  # three parameter model
+  formula <- net ~  edges + mutual(0.8) +  ttriads(0.8)
+
+  # MPLE ONLY
+  test <- gergm(formula,
+                normalization_type = "division",
+                network_is_directed = TRUE,
+                use_MPLE_only = TRUE,
+                estimation_method = "Metropolis",
+                number_of_networks_to_simulate = 40000,
+                thin = 1/40,
+                proposal_variance = 0.5,
+                downweight_statistics_together = TRUE,
+                MCMC_burnin = 10000,
+                seed = 456,
+                convergence_tolerance = 0.5,
+                MPLE_gain_factor = 0.05,
+                force_x_theta_updates = 1,
+                weighted_MPLE = TRUE)
+
+  check_against <- c(5.244, -0.861)
+  expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
+
+
+  test <- gergm(formula,
+                normalization_type = "division",
+                network_is_directed = TRUE,
+                use_MPLE_only = FALSE,
+                estimation_method = "Metropolis",
+                number_of_networks_to_simulate = 40000,
+                thin = 1/40,
+                proposal_variance = 0.5,
+                downweight_statistics_together = TRUE,
+                MCMC_burnin = 10000,
+                seed = 456,
+                convergence_tolerance = 0.5,
+                MPLE_gain_factor = 0,
+                force_x_theta_updates = 1,
+                weighted_MPLE = TRUE)
+
+  check_against <- c(4.100, -0.732)
+  expect_equal(round(as.numeric(test@theta.coef[1,]),3), check_against)
+
+
 
 })

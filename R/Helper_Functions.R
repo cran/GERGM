@@ -1,46 +1,67 @@
 # Directional derivative statistics next These are needed for the Gibbs sampler
 
 # din2star
-din2star <- function(i, j, net) {
+din2star <- function(i, j, net, alpha, together) {
   nodes <- nrow(net)
   others <- (1:nodes)[-c(i, j)]
-  sum(net[cbind(others, j)])
+  if (together == 0) {
+    val <- sum(net[cbind(others, j)] ^ alpha)
+  } else {
+    val <- sum(net[cbind(others, j)]) ^ alpha
+  }
+  return(val)
+
 }
 
 # dout2star
-dout2star <- function(i, j, net) {
+dout2star <- function(i, j, net, alpha, together) {
   nodes <- nrow(net)
   others <- (1:nodes)[-c(i, j)]
-  sum(net[cbind(i, others)])
+  if (together == 0) {
+    val <- sum((net[cbind(i, others)]) ^ alpha)
+  } else {
+    val <- sum(net[cbind(i, others)]) ^ alpha
+  }
+  return(val)
 }
 
 # dedgeweight
-dedgeweight = function(i, j) {
-  1
+dedgeweight = function(i, j, alpha, together) {
+  1 ^ alpha
 }
 
 # drecip
-drecip <- function(i, j, net) {
-  net[j, i]
+drecip <- function(i, j, net, alpha, together) {
+  net[j, i] ^ alpha
 }
 
 # dctriads
-dctriads <- function(i, j, net) {
+dctriads <- function(i, j, net, alpha, together) {
   nodes <- nrow(net)
   others <- (1:nodes)[-c(i, j)]
   triples <- cbind(i, j, others)
-  sum(net[triples[, c(2, 3)]] * net[triples[, c(3, 1)]])
+  if (together == 0) {
+    val <- sum((net[triples[, c(2, 3)]] ^ alpha) *
+                 (net[triples[, c(3, 1)]] ^ alpha))
+  } else {
+    val <- sum(net[triples[, c(2, 3)]] * net[triples[, c(3, 1)]]) ^ alpha
+  }
+  return(val)
 }
 
 # dttriads
-dttriads <- function(i, j, net) {
+dttriads <- function(i, j, net, alpha, together) {
   nodes <- nrow(net)
   others <- (1:nodes)[-c(i, j)]
   triples <- cbind(i, j, others)
   t2 <- sum(net[triples[, c(2, 3)]] * net[triples[, c(1, 3)]])
   t3 <- sum(net[triples[, c(3, 2)]] * net[triples[, c(3, 1)]])
   t4 <- sum(net[triples[, c(3, 2)]] * net[triples[, c(1, 3)]])
-  return(t2 + t3 + t4)
+  if (together == 0) {
+    return(t2 ^ alpha + t3 ^ alpha + t4 ^ alpha)
+  } else {
+    return((t2 + t3 + t4) ^ alpha)
+  }
 }
 
 # dtriads (undirected)
@@ -55,10 +76,14 @@ dtriads <- function(i, j, net){
 
 # dh function weight w_{i,j} will be conditioned upon
 # Calculate the marginal change in the network
-dh <- function(net, statistics, i, j) {
-  temp <- c(dout2star(i, j, net), din2star(i, j, net), dctriads(i, j, net),
-            drecip(i, j, net), dttriads(i, j, net), dedgeweight(i, j))
-  if(length(temp) != length(statistics)){
+dh <- function(net, statistics, i, j, alphas, together) {
+  temp <- c(dout2star(i, j, net, alphas[1], together),
+            din2star(i, j, net, alphas[2], together),
+            dctriads(i, j, net, alphas[3], together),
+            drecip(i, j, net, alphas[4], together),
+            dttriads(i, j, net, alphas[5], together),
+            dedgeweight(i, j, alphas[6], together))
+  if (length(temp) != length(statistics)) {
     stop("Development ERROR! Please email mdenny@psu.edu! The dh() internal function in Helper_Functions.R has been supplied an incorrect number of statistics.")
   }
   value <- temp[statistics > 0]
@@ -119,36 +144,6 @@ outdeg <- function(net) {
   return(od)
 }
 
-# Convert an observed network to edge weight vectors x and y
-
-net2xy <- function(net, statistics, directed) {
-  y <- NULL
-  x <- NULL
-  nodes <- nrow(net)
-  if (directed == TRUE) {
-    for (i in 1:nodes) {
-      for (j in (1:nodes)[-i]) {
-        y <- c(y, net[i, j])
-        x <- rbind(x, dh(net, statistics, i, j))
-      }
-    }
-  }
-  if (directed == FALSE) {
-    for (i in 1:nodes) {
-      for (j in (1:nodes)[-i]) {
-        y <- c(y, net[i, j])
-        x <- rbind(x, dh(net, statistics, i, j))
-      }
-    }
-#     for (i in 2:nodes) {
-#       for (j in (1:(i - 1))) {
-#         y <- c(y, net[i, j])
-#         x <- rbind(x, dh(net, statistics, i, j))
-#       }
-#     }
-  }
-  return(list(y = y, x = x))
-}
 
 # Draw a random value either uniform or according to density
 rtexp <- function(n, lambda) {
@@ -162,27 +157,11 @@ rtexp <- function(n, lambda) {
   } else u
 }
 
-# The conditional density of each weight from a sample
-dtexp <- function(x, lambda) {
-  den <- numeric(length(x))
-  den[which(lambda != 0)] <- exp(x[which(lambda != 0)] *
-                                   lambda[which(lambda != 0)]) /
-    (1 / lambda[which(lambda != 0)] * (exp(lambda[which(lambda != 0)]) - 1))
-  den[which(lambda == 0)] <- 1
-  return(den)
-}
-
 # Function to generate dispersed unit interval
 rdisp <- function(n) {
   pnorm(abs(rnorm(n) * 6))
 }
 
-# Log likelihood function calculations
-
-# pseudolikelihood given theta#
-pl <- function(theta, y, x) {
-  return(sum(log(dtexp(y, x %*% theta))))
-}
 
 # add to console output field in GERGM_Object
 #GERGM_Object <- store_console_output(GERGM_Object,addition)
@@ -220,12 +199,13 @@ parse_formula_term <- function(term,
                       threshold = 0,
                       levels = NA,
                       same = NA,
+                      method = "regression",
                       parens_no_arg = NA,
                       network_matrix_object = NA,
                       num_levels = NA,
                       base_index = NA)
   possible_fields <- c("term","alpha","covariate", "base", "network",
-                       "threshold", "levels", "same", "")
+                       "threshold", "levels", "same", "method", "")
   # if there is an argument to the term -- this will be a lazy implementation
   # where if you do not get the name right, it will simply not be set and a
   # warning will be thrown.
