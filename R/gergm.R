@@ -6,7 +6,7 @@
 #' using any combination of the following statistics: `out2stars(alpha = 1)`,
 #' `in2stars(alpha = 1)`, `ctriads(alpha = 1)`, `mutual(alpha = 1)`,
 #' `ttriads(alpha = 1)`, `absdiff(covariate = "MyCov")`,
-#' `edgecov(covariate = "MyCov")`, `sender(covariate = "MyCov")`,
+#'  `sender(covariate = "MyCov")`,
 #' `reciever(covariate = "MyCov")`, `nodematch(covariate)`,
 #' `nodemix(covariate, base = "MyBase")`, `netcov(network)` and
 #' `edges(alpha = 1, method = c("regression","endogenous"))`. If the user
@@ -16,11 +16,11 @@
 #' (strongly recommended). The user may select the "regression" method
 #' (default) to include an intercept in the lambda transformation of the
 #' network, or "endogenous" to include the intercept as in a traditional ERGM
-#' model.  To use exponential downweighting for any of the network level terms,
+#' model.  To use exponential down-weighting for any of the network level terms,
 #' simply specify a value for alpha less than 1. The `(alpha = 1)` term may be
-#' omitted from the structural terms if no exponential downweighting is
+#' omitted from the structural terms if no exponential down weighting is
 #' required. In this case, the terms may be provided as: `out2star`, `in2star`,
-#' `ctriads`, `recip`, `ttriads`. If the network is undirected the user may only
+#' `ctriads`, `mutual`, `ttriads`. If the network is undirected the user may only
 #' specify the following terms: `twostars(alpha = 1)`,  `ttriads(alpha = 1)`,
 #' `absdiff(covariate = "MyCov")`,
 #' `sender(covariate = "MyCov")`, `nodematch(covariate)`,
@@ -37,18 +37,18 @@
 #' the statistic. This can be a useful option if the user believes that a
 #' network property varies with some property of nodes.
 #' @param covariate_data A data frame containing node level covariates the user
-#' wished to transform into sender or reciever effects. It must have row names
+#' wished to transform into sender or receiver effects. It must have row names
 #' that match every entry in colnames(raw_network), should have descriptive
-#' column names.  If left NULL, then no sender or reciever effects will be
+#' column names.  If left NULL, then no sender or receiver effects will be
 #' added.
 #' @param normalization_type If only a raw_network is provided the function
 #' will automatically check to determine if all edges fall in the [0,1] interval.
 #' If edges are determined to fall outside of this interval, then a trasformation
 #' onto the interval may be specified. If "division" is selected, then the data
-#' will have a value added to them such that the minimum value is atleast zero
+#' will have a value added to them such that the minimum value is at least zero
 #' (if necessary) and then all edge values will be divided by the maximum to
 #' ensure that the maximum value is in [0,1]. If "log" is selected, then the data
-#' will have a value added to them such that the minimum value is atleast zero
+#' will have a value added to them such that the minimum value is at least zero
 #' (if necessary), then 1 will be added to all edge values before they are logged
 #' and then divided by the largest value, again ensuring that the resulting
 #' network is on [0,1]. Defaults to "log" and need not be set to NULL if
@@ -59,7 +59,7 @@
 #' likelihood estimates should be obtained. In this case, no simulations will be
 #' performed. Default is FALSE.
 #' @param transformation_type Specifies how covariates are transformed onto the
-#' raw network. When working with heavly tailed data that are not strictly
+#' raw network. When working with heavy tailed data that are not strictly
 #' positive, select "Cauchy" to transform the data using a Cauchy distribution.
 #' If data are strictly positive and heavy tailed (such as financial data) it is
 #' suggested the user select "LogCauchy" to perform a Log-Cauchy transformation
@@ -113,13 +113,13 @@
 #' model is not degenerate but simulated statistics do not match observed network
 #' well when algorithm stops after first y updates.
 #' @param output_directory The directory where you would like output generated
-#' by the GERGM estimation proceedure to be saved (if output_name is specified).
+#' by the GERGM estimation procedure to be saved (if output_name is specified).
 #' This includes, GOF, trace, and parameter estimate plots, as well as a summary
-#' of the estimation proceedure and an .Rdata file containing the GERGM object
+#' of the estimation procedure and an .Rdata file containing the GERGM object
 #' returned by this function. May be left as NULL if the user would prefer all
 #' plots be printed to the graphics device.
 #' @param output_name The common name stem you would like to assign to all
-#' objects output by the gergm function. Default value of NULL will not save any
+#' objects output by the gergm() function. Default value of NULL will not save any
 #' output directly to .pdf files, it will be printed to the console instead. Must
 #' be a character string or NULL. For example, if "Test" is supplied as the
 #' output_name, then 4 files will be output: "Test_GOF.pdf", "Test_Parameter_Estim
@@ -162,16 +162,19 @@
 #' parameters (mutual, ttriads, etc.), grid_steps = 3 will result in a (2*3+1)^5
 #' = 16807 parameter grid search. Again this feature is highly experimental and
 #' should only be used as a last resort (after playing with exponential
-#' downweighting and the MPLE_gain_factor).
+#' down weighting and the MPLE_gain_factor).
+#' @param beta_correlation_model Defaults to FALSE. If TRUE, then the beta
+#' correlation model is estimated. A correlation network must be provided, but
+#' all covariates and undirected statistics may be supplied as normal.
 #' @param weighted_MPLE Defaults to FALSE. Should be used whenever the user is
-#' specifying statistics with alpha downweighting. Tends to provide better
+#' specifying statistics with alpha down weighting. Tends to provide better
 #' initialization when downweight_statistics_together = FALSE.
 #' @param fine_grained_pv_optimization Logical indicating whether fine grained
 #' proposal variance optimization should be used. This will often slow down
 #' proposal variance optimization, but may provide better results. Highly
 #' recommended if running a correlation model.
 #' @param parallel Logical indicating whether the weighted MPLE objective and any
-#' other operations that can be easily paralllelized should be calculated in
+#' other operations that can be easily parallelized should be calculated in
 #' parallel. Defaults to FALSE. If TRUE, a significant speedup in computation
 #' may be possible.
 #' @param parallel_statistic_calculation Logical indicating whether network
@@ -180,10 +183,10 @@
 #' larger networks.
 #' @param cores Numeric value defaulting to 1. Can be set to any number up to the
 #' number of threads/cores available on your machine. Will be used to speed up
-#' computations if parllel = TRUE.
+#' computations if parallel = TRUE.
 #' @param use_stochastic_MH A logical indicating whether a stochastic approximation
 #' to the h statistics should be used under Metropolis Hastings in-between
-#' thinned samples. This may dramatically speed up estimation. Defualts to FALSE.
+#' thinned samples. This may dramatically speed up estimation. Defaults to FALSE.
 #' HIGHLY EXPERIMENTAL!
 #' @param stochastic_MH_proportion Percentage of dyads/triads to use for
 #' approximation, defaults to 0.25.
@@ -256,6 +259,7 @@ gergm <- function(formula,
                   stop_for_degeneracy = FALSE,
                   target_accept_rate = 0.25,
                   theta_grid_optimization_list = NULL,
+                  beta_correlation_model = FALSE,
                   weighted_MPLE = FALSE,
                   fine_grained_pv_optimization = FALSE,
                   parallel = FALSE,
@@ -267,6 +271,9 @@ gergm <- function(formula,
                   slackr_integration_list = NULL,
                   ...
                   ){
+
+  # pass in experimental features through elipsis
+  object <- as.list(substitute(list(...)))[-1L]
 
   # record start time for estimation
   start_time <- Sys.time()
@@ -281,6 +288,20 @@ gergm <- function(formula,
   possible_structural_terms_undirected <- c("twostars",
                                             "ttriads",
                                             "edges")
+
+  # set the number of threads to use with parallel
+  if (parallel) {
+    RcppParallel::setThreadOptions(numThreads = cores)
+  }
+
+  # if we are using a correlation network, then the network must be undirected.
+  if (beta_correlation_model) {
+    if (network_is_directed) {
+      cat("Setting network_is_directed to FALSE for correlation network...\n")
+    }
+    network_is_directed <- FALSE
+  }
+
   if (network_is_directed) {
     possible_structural_term_indices <- 1:6
   } else {
@@ -300,10 +321,6 @@ gergm <- function(formula,
                                 "gaussian",
                                 "lognormal")
 
-  # set the number of threads to use with parallel
-  if (parallel) {
-    RcppParallel::setThreadOptions(numThreads = cores)
-  }
 
   # check terms for undirected network
   if (!network_is_directed) {
@@ -366,7 +383,9 @@ gergm <- function(formula,
      possible_network_terms,
      covariate_data = covariate_data,
      normalization_type = normalization_type,
-     is_directed = network_is_directed)
+     is_correlation_network = FALSE,
+     is_directed = network_is_directed,
+     beta_correlation_model = beta_correlation_model)
 
   data_transformation <- NULL
   if (!is.null(Transformed_Data$transformed_covariates)) {
@@ -387,7 +406,9 @@ gergm <- function(formula,
      transform.data = data_transformation,
      lambda.coef = NULL,
      transformation_type = transformation_type,
+     is_correlation_network = FALSE,
      is_directed = network_is_directed,
+     beta_correlation_model = beta_correlation_model,
      covariate_data = covariate_data,
      possible_structural_terms_undirected = possible_structural_terms_undirected)
 
@@ -415,6 +436,10 @@ gergm <- function(formula,
   }else{
     GERGM_Object@print_output <- TRUE
   }
+
+  # if we are using a correlation network then set field to TRUE.
+  GERGM_Object@is_correlation_network <- FALSE # deprecated
+  GERGM_Object@beta_correlation_model <- beta_correlation_model
 
   # record the various optimizations we are using so that they can be used in
   # the main algorithm
@@ -525,14 +550,21 @@ gergm <- function(formula,
     }
 
     init.statistics <- NULL
-
+    if (GERGM_Object@is_correlation_network) {
+      init.statistics <- calculate_h_statistics(
+        GERGM_Object,
+        GERGM_Object@statistic_auxiliary_data,
+        all_weights_are_one = FALSE,
+        calculate_all_statistics = TRUE,
+        use_constrained_network = FALSE)
+    }else{
       init.statistics <- calculate_h_statistics(
         GERGM_Object,
         GERGM_Object@statistic_auxiliary_data,
         all_weights_are_one = FALSE,
         calculate_all_statistics = TRUE,
         use_constrained_network = TRUE)
-
+    }
     # fix issue with the wrong stats being saved
     GERGM_Object@stats[2,] <- init.statistics
     hsn.tot <- GERGM_Object@MCMC_output$Statistics

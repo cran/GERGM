@@ -1,5 +1,6 @@
 test_that("Hyperparameter optimization works", {
   skip_on_cran()
+  skip("Skipping test that takes too long.")
 
   set.seed(12345)
   net <- matrix(runif(100,0,1),10,10)
@@ -35,6 +36,57 @@ test_that("Hyperparameter optimization works", {
   expect_equal(check, check_against)
 
 })
+
+
+
+
+
+test_that("Model works for correlation networks", {
+  skip_on_cran()
+  skip("Skipping test as it takes a while.")
+
+  set.seed(12345)
+  #Function to generating a random positive-definite matrix with user-specified positive
+  #eigenvalues
+  # If eigenvalues are not specified, they are generated from a uniform
+  #distribution
+
+  Posdef <- function (n, ev = runif(n, 0, 10))
+  {
+    Z <- matrix(ncol=n, rnorm(n^2))
+    decomp <- qr(Z)
+    Q <- qr.Q(decomp)
+    R <- qr.R(decomp)
+    d <- diag(R)
+    ph <- d / abs(d)
+    O <- Q %*% diag(ph)
+    Z <- t(O) %*% diag(ev) %*% O
+    return(Z)
+  }
+
+  #Generate a random correlation matrix of dimension 10 x 10
+  x <- rnorm(10)
+
+  pdmat <- Posdef(n = 10)
+  correlations <- pdmat / max(abs(pdmat))
+  diag(correlations) <- 1
+  net <- (correlations + t(correlations)) / 2
+  colnames(net) <- rownames(net) <- letters[1:10]
+
+  formula <- net ~ edges + ttriads
+
+  test <- gergm(formula,
+                estimation_method = "Metropolis",
+                number_of_networks_to_simulate = 100000,
+                thin = 1/100,
+                proposal_variance = 0.2,
+                MCMC_burnin = 100000,
+                seed = 456,
+                convergence_tolerance = 0.5,
+                beta_correlation_model = TRUE)
+
+})
+
 
 test_that("parallel threading works", {
   skip_on_cran()

@@ -11,6 +11,8 @@
 #' was passed in, but now with additional GOF statistics such as modularity
 #' included in the `@simulated_statistics_for_GOF` and `@additional_stats`
 #' fields
+#' @param observed_support logical indicating whether GOF plots should use
+#' observed support. Defaults to FALSE.
 #' @param ... Additional Arguments can be passed in. Included for eventual
 #' compatibility with XERGM package.
 #' @return A set of box plots where of simulated network statistics centered at
@@ -24,6 +26,7 @@ GOF <- function(GERGM_Object,
                 column_names = NULL,
                 modularity_group_memberships = NULL,
                 return_GERGM_Object = FALSE,
+                observed_support = FALSE,
                 ...){
   #define colors
   UMASS_BLUE <- rgb(51,51,153,155,maxColorValue = 255)
@@ -33,7 +36,53 @@ GOF <- function(GERGM_Object,
     GERGM_Object,
     modularity_group_memberships)
 
-  temp <- GERGM_Object@simulated_statistics_for_GOF
+  if (observed_support) {
+    temp <- GERGM_Object@simulated_statistics_for_GOF
+    temp3 <- GERGM_Object@MCMC_output$Networks
+    temp4 <- GERGM_Object@MCMC_output$Statistics
+    # recalculate statistics
+    for(l in 1:nrow(temp4)) {
+      temp4[l,] <- calculate_h_statistics(
+        GERGM_Object,
+        GERGM_Object@statistic_auxiliary_data,
+        all_weights_are_one = FALSE,
+        calculate_all_statistics = TRUE,
+        use_constrained_network = FALSE,
+        network = temp3[,,l])
+    }
+    temp[,1:ncol(temp4)] <- temp4
+    stats <- GERGM_Object@stats[1,]
+
+  } else {
+    temp <- GERGM_Object@simulated_statistics_for_GOF
+    stats <- GERGM_Object@stats[2,]
+  }
+  # thin chain for accurate t-test stats
+  temp <- Thin_Statistic_Samples(temp)
+
+  cat("\nStatistics used in comparison:\n")
+  print(stats)
+  cat("\nMean statistic values from simulated networks:\n")
+  print(colMeans(temp))
+  cat("\n")
+  # calculate t-test statistics
+  t_stats <- stats
+  for (i in 1:length(stats)) {
+    t_stats[i] <- as.numeric(t.test(temp[,i], mu = stats[i])$statistic)
+  }
+
+  cat("t-statistics for difference of simulated mean from observed statistic...\n")
+  print(t_stats)
+
+  for (i in 1:length(stats)) {
+    mn <- mean(temp[,i])
+    ste <- sd(temp[,i])
+    t_stats[i] <- (stats[i] - mn)/ste
+  }
+  cat("\n")
+  cat("t-statistics for test of whether observed statistic is an outlier with respect to simulated statistics...\n")
+  print(t_stats)
+  cat("\n")
 
   # check to see if user provided column names, if not, then generate them
   if (is.null(column_names)) {
@@ -71,7 +120,7 @@ GOF <- function(GERGM_Object,
 
       par(mar = c(2.5,4,2.5,2))
       layout(matrix(c(1,1,2,3), 2, 2, byrow = FALSE),
-             widths=c(3,1), heights=c(1,1))
+             widths = c(3,1), heights=c(1,1))
       boxplot(temp, medcol = UMASS_BLUE,
               xlab = "Network Statistic",
               ylab = "Statistic Values",
@@ -81,7 +130,7 @@ GOF <- function(GERGM_Object,
       sim <- GERGM_Object@additional_stats$simulated_in_degrees
       plot (density(sim),
             main = "In-Degree Distribution",
-            col = UMASS_RED,
+            col = UMASS_BLUE,
             lwd = 3,
             xlim = c(min(c(sim)), max(c(sim))),
             ylim = c(0, max(density(sim)$y)))
@@ -90,7 +139,7 @@ GOF <- function(GERGM_Object,
       sim <- GERGM_Object@additional_stats$simulated_out_degrees
       plot (density(sim),
             main = "Out-Degree Distribution",
-            col = UMASS_RED,
+            col = UMASS_BLUE,
             lwd = 3,
             xlim = c(min(c(sim)), max(c(sim))),
             ylim = c(0, max(density(sim)$y)))
@@ -104,7 +153,7 @@ GOF <- function(GERGM_Object,
 
       temp2 <- apply(temp,2,sd)
       for (i in 1:ncol(temp)) {
-        temp[,i] <- temp[,i] - GERGM_Object@stats[2,i]
+        temp[,i] <- temp[,i] - stats[i]
         temp[,i] <- temp[,i]/temp2[i]
       }
 
@@ -120,8 +169,10 @@ GOF <- function(GERGM_Object,
               main = "Blue = Observed Statistic, Red = Simulated Mean",
               xaxt = "n",
               las = 1)
-      zero_line <- rep(0,length(GERGM_Object@stats[2, ]))
+
+      zero_line <- rep(0,length(stats))
       zero_plot <- rbind(zero_line,zero_line)
+
       axis(side = 1,at = 1:ncol(temp),colnames(temp),tick = FALSE, line = 1)
       boxplot(zero_plot, add = T, medcol = UMASS_BLUE, names = F, axes = F)
 
@@ -147,7 +198,7 @@ GOF <- function(GERGM_Object,
 
       temp2 <- apply(temp,2,sd)
       for(i in 1:ncol(temp)){
-        temp[,i] <- temp[,i] - GERGM_Object@stats[2,i]
+        temp[,i] <- temp[,i] - stats[i]
         temp[,i] <- temp[,i]/temp2[i]
       }
       par(mar = c(2.5,4,2.5,2))
@@ -159,7 +210,7 @@ GOF <- function(GERGM_Object,
               main = "Blue = Observed Statistic, Red = Simulated Mean",
               xaxt = "n",
               las = 1)
-      zero_line <- rep(0,length(GERGM_Object@stats[2, ]))
+      zero_line <- rep(0,length(stats))
       zero_plot <- rbind(zero_line,zero_line)
       axis(side = 1,at = 1:ncol(temp),colnames(temp),tick = FALSE, line = 1)
       boxplot(zero_plot, add = T, medcol = UMASS_BLUE, names = F, axes = F)
@@ -192,7 +243,7 @@ GOF <- function(GERGM_Object,
              lwd = 3)
     }
   }
-
+  par(mfrow = c(1,1))
   if (return_GERGM_Object) {
     return(GERGM_Object)
   }

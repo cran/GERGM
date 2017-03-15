@@ -11,7 +11,7 @@
 #' @param network_is_directed Logical specifying whether or not the observed
 #' network is directed. Default is TRUE.
 #' @param simulation_method Default is "Metropolis" which allows for exponential
-#' downweighting, can also be "Gibbs".
+#' down weighting, can also be "Gibbs".
 #' @param number_of_networks_to_simulate Number of simulations generated for
 #' estimation via MCMC. Default is 500.
 #' @param thin The proportion of samples that are kept from each simulation. For
@@ -29,10 +29,10 @@
 #' 100.
 #' @param seed Seed used for reproducibility. Default is 123.
 #' @param GERGM_Object Optional argument allowing the user to supply a GERGM
-#' object output by the gergm() estimation function in order to simualt further
+#' object output by the gergm() estimation function in order to simulate further
 #' networks. Defaults to NULL. If a GERGM object is provided, any user specified
 #' parameter values will be ignored and the final parameter estimates from the
-#' gergm() function will be used instead. When using this option, the folowing
+#' gergm() function will be used instead. When using this option, the following
 #' terms must still be specified: number_of_networks_to_simulate, thin, and
 #' MCMC_burnin. proposal_variance may also be specified, or if set equal to NULL,
 #' then the proposal variance from parameter estimation will be used instead (
@@ -48,36 +48,37 @@
 #' Metropolis Hastings simulations.
 #' @param use_stochastic_MH A logical indicating whether a stochastic approximation
 #' to the h statistics should be used under Metropolis Hastings in-between
-#' thinned samples. This may dramatically speed up estimation. Defualts to FALSE.
+#' thinned samples. This may dramatically speed up estimation. Defaults to FALSE.
 #' HIGHLY EXPERIMENTAL!
 #' @param stochastic_MH_proportion Percentage of dyads/triads to use for
 #' approximation, defaults to 0.25
+#' @param beta_correlation_model Defaults to FALSE. If TRUE, then the beta
+#' correlation model is estimated. A correlation network must be provided, but
+#' all covariates and undirected statistics may be supplied as normal.
 #' @param covariate_data A data frame containing node level covariates the user
-#' wished to transform into sender or reciever effects. It must have row names
+#' wished to transform into sender or receiver effects. It must have row names
 #' that match every entry in colnames(raw_network), should have descriptive
-#' column names.  If left NULL, then no sender or reciever effects will be
+#' column names.  If left NULL, then no sender or receiver effects will be
 #' added.
 #' @param lambdas A vector of lambda parameters given in the same order as the
 #' formula terms, which the user would like to use to parameterize the model.
 #' Covariate effects should be specified after endogenous effects.
 #' @param ... Optional arguments, currently unsupported.
 #' @examples
+#' \dontrun{
 #' set.seed(12345)
 #' net <- matrix(runif(100),10,10)
 #' diag(net) <- 0
 #' colnames(net) <- rownames(net) <- letters[1:10]
-#' formula <- net ~ ttriads + in2stars
+#' formula <- net ~ edges + ttriads + in2stars
 #'
 #' test <- simulate_networks(formula,
 #'  thetas = c(0.6,-0.8),
-#'  network_is_directed = TRUE,
-#'  simulation_method = "Metropolis",
+#'  lambdas = 0.2,
 #'  number_of_networks_to_simulate = 100,
 #'  thin = 1/10,
 #'  proposal_variance = 0.5,
-#'  downweight_statistics_together = TRUE,
-#'  MCMC_burnin = 1000,
-#'  omit_intercept_term = TRUE,
+#'  MCMC_burnin = 100,
 #'  seed = 456)
 #'
 #' # preferred method for specifying a null model
@@ -85,17 +86,15 @@
 #' test <- simulate_networks(
 #'  formula,
 #'  thetas = 0,
-#'  network_is_directed = TRUE,
-#'  simulation_method = "Metropolis",
-#'  number_of_networks_to_simulate = 1000,
+#'  number_of_networks_to_simulate = 100,
 #'  thin = 1/10,
 #'  proposal_variance = 0.5,
-#'  downweight_statistics_together = TRUE,
-#'  MCMC_burnin = 1000,
+#'  MCMC_burnin = 100,
 #'  seed = 456)
+#'  }
 #' @return A list object containing simulated networks and parameters used to
 #' specify the simulation. See the $MCMC_Output field for simulated networks. If
-#' GERGM_Object is provded, then a GERGM object will be returned instead.
+#' GERGM_Object is provided, then a GERGM object will be returned instead.
 #' @export
 simulate_networks <- function(formula,
   thetas,
@@ -113,6 +112,7 @@ simulate_networks <- function(formula,
   target_accept_rate = 0.25,
   use_stochastic_MH = FALSE,
   stochastic_MH_proportion = 1,
+  beta_correlation_model = FALSE,
   covariate_data = NULL,
   lambdas = NULL,
   ...
@@ -139,7 +139,17 @@ simulate_networks <- function(formula,
 
   if (is.null(GERGM_Object)) {
     # pass in experimental correlation network feature through elipsis
+    simulate_correlation_network <- FALSE
     weighted_MPLE <- FALSE
+    object <- as.list(substitute(list(...)))[-1L]
+    if (length(object) > 0) {
+      if (!is.null(object$simulate_correlation_network)) {
+        if (object$simulate_correlation_network) {
+          simulate_correlation_network <- TRUE
+          cat("Using experimental correlation network feature...\n")
+        }
+      }
+    }
 
     # This is the main function to estimate a GERGM model
 
@@ -177,6 +187,18 @@ simulate_networks <- function(formula,
         possible_structural_terms_undirected)
     }
 
+    if (simulate_correlation_network & beta_correlation_model) {
+      stop("You may only specify one of: simulate_correlation_network (Harry-Joe) or beta_correlation_model.")
+    }
+
+    # if we are using a correlation network, then the network must be undirected.
+    if (simulate_correlation_network | beta_correlation_model) {
+      if (network_is_directed) {
+        cat("Setting network_is_directed to FALSE for correlation network...\n")
+      }
+      network_is_directed <- FALSE
+    }
+
     #make sure proposal variance is greater than zero
     if (proposal_variance <= 0) {
       stop("You supplied a proposal variance that was less than or equal to zero.")
@@ -192,7 +214,9 @@ simulate_networks <- function(formula,
       possible_network_terms,
       covariate_data = covariate_data,
       normalization_type = normalization_type,
-      is_directed = network_is_directed)
+      is_correlation_network = simulate_correlation_network,
+      is_directed = network_is_directed,
+      beta_correlation_model = beta_correlation_model)
 
     data_transformation <- NULL
     if (!is.null(Transformed_Data$transformed_covariates)) {
@@ -211,7 +235,9 @@ simulate_networks <- function(formula,
       transform.data = data_transformation,
       lambda.coef = lambdas,
       transformation_type = transformation_type,
+      is_correlation_network = simulate_correlation_network,
       is_directed = network_is_directed,
+      beta_correlation_model = beta_correlation_model,
       possible_structural_terms_undirected = possible_structural_terms_undirected)
 
     if (!is.null(data_transformation)) {
@@ -226,6 +252,7 @@ simulate_networks <- function(formula,
     GERGM_Object@simulation_only <- TRUE
     GERGM_Object@theta.par <- thetas
     GERGM_Object@directed_network <- network_is_directed
+    GERGM_Object@is_correlation_network <- simulate_correlation_network
     GERGM_Object@proposal_variance <- proposal_variance
     GERGM_Object@estimation_method <- simulation_method
     GERGM_Object@target_accept_rate <- target_accept_rate
@@ -233,6 +260,7 @@ simulate_networks <- function(formula,
     GERGM_Object@thin <- thin
     GERGM_Object@burnin <- MCMC_burnin
     GERGM_Object@downweight_statistics_together <- downweight_statistics_together
+    GERGM_Object@beta_correlation_model <- beta_correlation_model
     GERGM_Object@weighted_MPLE <- weighted_MPLE
     GERGM_Object@hyperparameter_optimization <- optimize_proposal_variance
     GERGM_Object@fine_grained_pv_optimization <- TRUE
@@ -266,7 +294,24 @@ simulate_networks <- function(formula,
     GERGM_Object@stats <- statistic_values
 
     # allow the user to specify mu and phi
-     if (check_for_edges$regression_intercept) {
+    if (GERGM_Object@beta_correlation_model) {
+      inds <- 1:(length(lambdas) - 1)
+      #Transform to bounded network X via beta cdf
+      beta <- as.numeric(lambdas[inds])
+      mu <- logistic(beta, GERGM_Object@data_transformation)
+      phi <- lambdas[length(lambdas)]
+      shape1 <- mu * phi
+      shape2 <- (1 - mu) * phi
+      temp <- (GERGM_Object@bounded.network + 1)/2
+      X <- pbeta(temp,shape1 = shape1, shape2 = shape2)
+      # store our new bounded network
+      GERGM_Object@bounded.network <- X
+
+      # store mu and phi for later use in reverse transformation
+      GERGM_Object@mu <- mu
+      GERGM_Object@phi <- phi
+    } else if (check_for_edges$regression_intercept &
+               !GERGM_Object@beta_correlation_model) {
       beta <- lambdas[1:(length(lambdas) - 1)]
       sig <- 0.01 + exp(lambdas[length(lambdas)])
       BZ <- 0
@@ -336,6 +381,7 @@ simulate_networks <- function(formula,
 
   print(stats.data)
 
+  cat("\n")
   # fix constrained values
   GERGM_Object@stats[2,] <- init.statistics
 
@@ -346,6 +392,11 @@ simulate_networks <- function(formula,
       colnames(GERGM_Object@theta.coef)[change] <- "twostars"
     }
   }
+
+  GERGM_Object@simulated_bounded_networks_for_GOF <- GERGM_Object@MCMC_output$Networks
+
+  # precalculate intensities and degree distributions so we can return them.
+  GERGM_Object <- calculate_additional_GOF_statistics(GERGM_Object)
 
 
   # make GOF plot
@@ -370,6 +421,7 @@ simulate_networks <- function(formula,
                         MCMC_Output = GERGM_Object@MCMC_output,
                         bounded_networks = GERGM_Object@simulated_bounded_networks_for_GOF)
     return(return_list)
+    # return(GERGM_Object)
   } else {
     return(GERGM_Object)
   }

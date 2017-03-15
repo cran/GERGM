@@ -11,7 +11,8 @@ simulate_networks(formula, thetas, simulation_method = c("Metropolis",
   GERGM_Object = NULL, return_constrained_networks = FALSE,
   optimize_proposal_variance = FALSE, target_accept_rate = 0.25,
   use_stochastic_MH = FALSE, stochastic_MH_proportion = 1,
-  covariate_data = NULL, lambdas = NULL, ...)
+  beta_correlation_model = FALSE, covariate_data = NULL, lambdas = NULL,
+  ...)
 }
 \arguments{
 \item{formula}{A formula object that specifies which statistics the user would
@@ -24,7 +25,7 @@ specified: c("edges", "out2stars", "in2stars",     "ctriads", "mutual",
 formula terms, which the user would like to use to parameterize the model.}
 
 \item{simulation_method}{Default is "Metropolis" which allows for exponential
-downweighting, can also be "Gibbs".}
+down weighting, can also be "Gibbs".}
 
 \item{network_is_directed}{Logical specifying whether or not the observed
 network is directed. Default is TRUE.}
@@ -52,10 +53,10 @@ will be discarded before drawing the samples used for estimation. Default is
 \item{seed}{Seed used for reproducibility. Default is 123.}
 
 \item{GERGM_Object}{Optional argument allowing the user to supply a GERGM
-object output by the gergm() estimation function in order to simualt further
+object output by the gergm() estimation function in order to simulate further
 networks. Defaults to NULL. If a GERGM object is provided, any user specified
 parameter values will be ignored and the final parameter estimates from the
-gergm() function will be used instead. When using this option, the folowing
+gergm() function will be used instead. When using this option, the following
 terms must still be specified: number_of_networks_to_simulate, thin, and
 MCMC_burnin. proposal_variance may also be specified, or if set equal to NULL,
 then the proposal variance from parameter estimation will be used instead (
@@ -75,16 +76,20 @@ Metropolis Hastings simulations.}
 
 \item{use_stochastic_MH}{A logical indicating whether a stochastic approximation
 to the h statistics should be used under Metropolis Hastings in-between
-thinned samples. This may dramatically speed up estimation. Defualts to FALSE.
+thinned samples. This may dramatically speed up estimation. Defaults to FALSE.
 HIGHLY EXPERIMENTAL!}
 
 \item{stochastic_MH_proportion}{Percentage of dyads/triads to use for
 approximation, defaults to 0.25}
 
+\item{beta_correlation_model}{Defaults to FALSE. If TRUE, then the beta
+correlation model is estimated. A correlation network must be provided, but
+all covariates and undirected statistics may be supplied as normal.}
+
 \item{covariate_data}{A data frame containing node level covariates the user
-wished to transform into sender or reciever effects. It must have row names
+wished to transform into sender or receiver effects. It must have row names
 that match every entry in colnames(raw_network), should have descriptive
-column names.  If left NULL, then no sender or reciever effects will be
+column names.  If left NULL, then no sender or receiver effects will be
 added.}
 
 \item{lambdas}{A vector of lambda parameters given in the same order as the
@@ -96,28 +101,26 @@ Covariate effects should be specified after endogenous effects.}
 \value{
 A list object containing simulated networks and parameters used to
 specify the simulation. See the $MCMC_Output field for simulated networks. If
-GERGM_Object is provded, then a GERGM object will be returned instead.
+GERGM_Object is provided, then a GERGM object will be returned instead.
 }
 \description{
 Simulates networks from a GERGM for a given set of parameter values.
 }
 \examples{
+\dontrun{
 set.seed(12345)
 net <- matrix(runif(100),10,10)
 diag(net) <- 0
 colnames(net) <- rownames(net) <- letters[1:10]
-formula <- net ~ ttriads + in2stars
+formula <- net ~ edges + ttriads + in2stars
 
 test <- simulate_networks(formula,
  thetas = c(0.6,-0.8),
- network_is_directed = TRUE,
- simulation_method = "Metropolis",
+ lambdas = 0.2,
  number_of_networks_to_simulate = 100,
  thin = 1/10,
  proposal_variance = 0.5,
- downweight_statistics_together = TRUE,
- MCMC_burnin = 1000,
- omit_intercept_term = TRUE,
+ MCMC_burnin = 100,
  seed = 456)
 
 # preferred method for specifying a null model
@@ -125,13 +128,10 @@ formula <- net ~ edges(method = "endogenous")
 test <- simulate_networks(
  formula,
  thetas = 0,
- network_is_directed = TRUE,
- simulation_method = "Metropolis",
- number_of_networks_to_simulate = 1000,
+ number_of_networks_to_simulate = 100,
  thin = 1/10,
  proposal_variance = 0.5,
- downweight_statistics_together = TRUE,
- MCMC_burnin = 1000,
+ MCMC_burnin = 100,
  seed = 456)
+ }
 }
-

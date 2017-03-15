@@ -23,7 +23,11 @@ Simulate_GERGM <- function(GERGM_Object,
   }
 
   # if we are dealing with a correlation network
-
+  is_correlation_network <- 0
+  if (GERGM_Object@is_correlation_network) {
+    is_correlation_network <- 1
+    undirect_network <- 1
+  }
 
   # Gibbs Simulation
   if (GERGM_Object@estimation_method == "Gibbs") {
@@ -114,6 +118,7 @@ Simulate_GERGM <- function(GERGM_Object,
         together = dw,
         seed = seed1,
         number_of_samples_to_store = store,
+        using_correlation_network = is_correlation_network,
         undirect_network = undirect_network,
         parallel = parallel,
         use_selected_rows = sad$specified_selected_rows_matrix - 1,
@@ -146,6 +151,7 @@ Simulate_GERGM <- function(GERGM_Object,
         together = dw,
         seed = seed1,
         number_of_samples_to_store = store,
+        using_correlation_network = is_correlation_network,
         undirect_network = undirect_network,
         parallel = parallel,
         use_selected_rows = sad$specified_selected_rows_matrix - 1,
@@ -223,8 +229,6 @@ Simulate_GERGM <- function(GERGM_Object,
     h.statistics <- as.data.frame(h.statistics)
     colnames(h.statistics) <- GERGM_Object@full_theta_names
   }
-
-
   # if we are using MH, then return more diagnostics
   if (GERGM_Object@estimation_method == "Metropolis") {
     GERGM_Object@MCMC_output = list(Networks = nets,
