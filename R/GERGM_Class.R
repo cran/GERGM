@@ -75,7 +75,19 @@ setClass(Class = "gergm",
            using_slackr_integration = "logical",
            start_time = "character",
            end_time = "character",
-           elapsed_time = "character"
+           elapsed_time = "character",
+           distribution_estimator = "character",
+           include_diagonal = "logical",
+           user_specified_initial_thetas = "numeric",
+           use_user_specified_initial_thetas = "logical",
+           integration_intervals = "numeric",
+           regularization_weight = "numeric",
+           convex_hull_proportion = "numeric",
+           start_with_zeros = "logical",
+           convex_hull_convergence_proportion = "numeric",
+           optimization_method = "character",
+           sample_edges_at_a_time = "numeric",
+           use_previous_thetas = "logical"
          ),
          validity = function(object) {
            if (!"matrix" %in% class(object@network) & is.null(object@network)

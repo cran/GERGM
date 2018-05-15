@@ -41,42 +41,31 @@
 #' that match every entry in colnames(raw_network), should have descriptive
 #' column names.  If left NULL, then no sender or receiver effects will be
 #' added.
-#' @param normalization_type If only a raw_network is provided the function
-#' will automatically check to determine if all edges fall in the [0,1] interval.
-#' If edges are determined to fall outside of this interval, then a trasformation
-#' onto the interval may be specified. If "division" is selected, then the data
-#' will have a value added to them such that the minimum value is at least zero
-#' (if necessary) and then all edge values will be divided by the maximum to
-#' ensure that the maximum value is in [0,1]. If "log" is selected, then the data
-#' will have a value added to them such that the minimum value is at least zero
-#' (if necessary), then 1 will be added to all edge values before they are logged
-#' and then divided by the largest value, again ensuring that the resulting
-#' network is on [0,1]. Defaults to "log" and need not be set to NULL if
-#' providing covariates as it will be ignored.
+#' @param beta_correlation_model Defaults to FALSE. If TRUE, then the beta
+#' correlation model is estimated. A correlation network must be provided, but
+#' all covariates and undirected statistics may be supplied as normal.
+#' @param distribution_estimator Provides an option to estimate the structure of
+#' row-wise marginal and joint distribtuions using a uniform-dirichlet proposal
+#' distribution. THIS FEATURE IS EXPERIMENTAL. Defaults to "none", in which case
+#' a normal GERGM is estimated, but can be set to one of "rowwise-marginal" and
+#' "joint" to propose either row-wsie marginal distribtuions or joint
+#' distributions. If an option other than "none" is selected, the beta correlation
+#' model will be turned off, estimation will automatically be set to Metropolis,
+#' no covariate data will be allowed, and the network will be set to
+#' directed. Furthermore, a "diagonal" statistic will be added to the model which
+#' simply records the sum of the diagonal of the network. The "mutual" statistic
+#' will also be adapted to include the diagonal elements. In the future, more
+#' statistics which take account of the network diagonal will be included.
 #' @param network_is_directed Logical specifying whether or not the observed
 #' network is directed. Default is TRUE.
-#' @param use_MPLE_only Logical specifying whether or not only the maximum pseudo
-#' likelihood estimates should be obtained. In this case, no simulations will be
-#' performed. Default is FALSE.
-#' @param transformation_type Specifies how covariates are transformed onto the
-#' raw network. When working with heavy tailed data that are not strictly
-#' positive, select "Cauchy" to transform the data using a Cauchy distribution.
-#' If data are strictly positive and heavy tailed (such as financial data) it is
-#' suggested the user select "LogCauchy" to perform a Log-Cauchy transformation
-#' of the data. For a tranformation of the data using a Gaussian distribution,
-#' select "Gaussian" and for strictly positive raw networks, select "LogNormal".
-#' The Default value is "Cauchy".
-#' @param estimation_method Simulation method for MCMC estimation. Default is
-#' "Metropolis", which allows for the most flexible model specifications, but
-#' may also be set to "Gibbs", if the user wishes to use Gibbs sampling.
-#' @param maximum_number_of_lambda_updates Maximum number of iterations of outer
-#' MCMC loop which alternately estimates transform parameters and ERGM
-#' parameters. In the case that data_transformation = NULL, this argument is
-#' ignored. Default is 10.
-#' @param maximum_number_of_theta_updates Maximum number of iterations within the
-#' MCMC inner loop which estimates the ERGM parameters. Default is 100.
+#' @param include_diagonal Logical indicating whether the diagonal should be
+#' included in the estimation proceedure. If TRUE, then a "diagonal" statistic
+#' is added to the model. Defaults to FALSE.
 #' @param number_of_networks_to_simulate Number of simulations generated for
 #' estimation via MCMC. Default is 500.
+#' @param MCMC_burnin Number of samples from the MCMC simulation procedure that
+#' will be discarded before drawing the samples used for estimation.
+#' Default is 100.
 #' @param thin The proportion of samples that are kept from each simulation. For
 #' example, thin = 1/200 will keep every 200th network in the overall simulated
 #' sample. Default is 1.
@@ -84,13 +73,66 @@
 #' simulation method. This parameter is inversely proportional to the average
 #' acceptance rate of the M-H sampler and should be adjusted so that the average
 #' acceptance rate is approximately 0.25. Default is 0.1.
-#' @param downweight_statistics_together Logical specifying whether or not the
-#' weights should be applied inside or outside the sum. Default is TRUE and user
-#' should not select FALSE under normal circumstances.
-#' @param MCMC_burnin Number of samples from the MCMC simulation procedure that
-#' will be discarded before drawing the samples used for estimation.
-#' Default is 100.
+#' @param target_accept_rate The target Metropolis Hastings acceptance rate.
+#' Defaults to 0.25
 #' @param seed Seed used for reproducibility. Default is 123.
+#' @param hyperparameter_optimization Logical indicating whether automatic
+#' hyperparameter optimization should be used. Defaults to FALSE. If TRUE, then
+#' the algorithm will automatically seek to find an optimal burnin and number of
+#' networks to simulate, and if using Metropolis Hasings, will attempt to select
+#' a proposal variance that leads to a acceptance rate within +-0.05 of
+#' target_accept_rate. Furthermore, if degeneracy is detected, the algorithm
+#' will attempt to adress the issue automatically. WARNING: This feature is
+#' experimental, and may greatly increase runtime. Please monitor console
+#' output!
+#' @param convex_hull_proportion Defaults to 0.9. Must be a number
+#' between 0 and 1, with values between 0.5 and 0.9 preferred. Setting a value
+#' for this parameter makes use of the initialization method introduced by
+#' Hummel, Hunter and Handcock (2012), which can provide a much more stable
+#' initialization method than MPLE. Selecting this method will not supercede
+#' other initialization methods, as it will be run after MPLE or grid search.
+#' However, in practice, it should often preclude the need for other
+#' initialization methods. If NULL, then standard MPLE an grid search methods
+#' may be used. Not recommended
+#' @param convex_hull_convergence_proportion Defaults to 0.9. This must be a
+#' number between 0 and 1, with values between 0.7 and 0.95 preferred. This
+#' parameter controls the stopping behavior of the convex hull initialization
+#' proceedure, with a higher value requiring a better fit before moving to
+#' standard estimation.
+#' @param sample_edges_at_a_time Defaults to 0. If greater than zero, then this
+#' is the number of edges to be updated at once during MCMCMLE. The lower this
+#' number is set, the higher the Metropolis Hastings acceptance rate should be.
+#' This option will primarily be relevant for large networks.
+#' @param parallel Logical indicating whether the weighted MPLE objective and any
+#' other operations that can be easily parallelized should be calculated in
+#' parallel. Defaults to FALSE. If TRUE, a significant speedup in computation
+#' may be possible.
+#' @param parallel_statistic_calculation Logical indicating whether network
+#' statistics should be calculated in parallel. This will tend to be slower for
+#' networks with les than ~30 nodes but may provide a substantial speedup for
+#' larger networks.
+#' @param cores Numeric value defaulting to 1. Can be set to any number up to the
+#' number of threads/cores available on your machine. Will be used to speed up
+#' computations if parallel = TRUE.
+#' @param use_stochastic_MH A logical indicating whether a stochastic approximation
+#' to the h statistics should be used under Metropolis Hastings in-between
+#' thinned samples. This may dramatically speed up estimation. Defaults to FALSE.
+#' HIGHLY EXPERIMENTAL!
+#' @param stochastic_MH_proportion Percentage of dyads/triads to use for
+#' approximation, defaults to 0.25.
+#' @param slackr_integration_list An optional list object that contains
+#' information necessary to provide updates about model fitting progress to a
+#' Slack channel (https://slack.com/). This can be useful if models take a long
+#' time to run, and you wish to receive updates on their progress (or if they
+#' become degenerate). The list object must be of the following form:
+#' list(model_name = "descriptive model name", channel = "#yourchannelname",
+#'  incoming_webhook_url = "https://hooks.slack.com/services/XX/YY/ZZ"). You
+#'  will need to set up incoming webhook integration for your slack channel and
+#'  then paste in the URL you get from slack into the incoming_webhook_url field.
+#'  If all goes well, and the computer you are running the GERGM estimation on
+#'  has internet access, your slack channel will receive updates when you start
+#'  estimation, after each lambda/theta parameter update, if the model becomes
+#'  degenerate, and when it completes running.
 #' @param convergence_tolerance Threshold designated for stopping criterion. If
 #' the difference of parameter estimates from one iteration to the next all have
 #' a p -value (under a paired t-test) greater than this value, the parameter
@@ -104,6 +146,32 @@
 #' statistics of observed network conform to statistics of networks simulated
 #' from GERGM parameterized by converged final parameter estimates. Default value
 #' is 0.05.
+#' @param normalization_type If only a raw_network is provided the function
+#' will automatically check to determine if all edges fall in the [0,1] interval.
+#' If edges are determined to fall outside of this interval, then a trasformation
+#' onto the interval may be specified. If "division" is selected, then the data
+#' will have a value added to them such that the minimum value is at least zero
+#' (if necessary) and then all edge values will be divided by the maximum to
+#' ensure that the maximum value is in [0,1]. If "log" is selected, then the data
+#' will have a value added to them such that the minimum value is at least zero
+#' (if necessary), then 1 will be added to all edge values before they are logged
+#' and then divided by the largest value, again ensuring that the resulting
+#' network is on [0,1]. Defaults to "log" and need not be set to NULL if
+#' providing covariates as it will be ignored.
+#' @param transformation_type Specifies how covariates are transformed onto the
+#' raw network. When working with heavy tailed data that are not strictly
+#' positive, select "Cauchy" to transform the data using a Cauchy distribution.
+#' If data are strictly positive and heavy tailed (such as financial data) it is
+#' suggested the user select "LogCauchy" to perform a Log-Cauchy transformation
+#' of the data. For a tranformation of the data using a Gaussian distribution,
+#' select "Gaussian" and for strictly positive raw networks, select "LogNormal".
+#' The Default value is "Cauchy".
+#' @param estimation_method Simulation method for MCMC estimation. Default is
+#' "Metropolis", which allows for the most flexible model specifications, but
+#' may also be set to "Gibbs", if the user wishes to use Gibbs sampling.
+#' @param downweight_statistics_together Logical specifying whether or not the
+#' weights should be applied inside or outside the sum. Default is TRUE and user
+#' should not select FALSE under normal circumstances.
 #' @param force_x_theta_updates Defaults to 1 where theta estimation is not
 #' allowed to converge until thetas have updated for x iterations . Useful when
 #' model is not degenerate but simulated statistics do not match observed network
@@ -129,20 +197,45 @@
 #' parameter plots are generated.
 #' @param verbose Defaults to TRUE (providing lots of output while model is
 #' running). Can be set to FALSE if the user wishes to see less output.
-#' @param hyperparameter_optimization Logical indicating whether automatic
-#' hyperparameter optimization should be used. Defaults to FALSE. If TRUE, then
-#' the algorithm will automatically seek to find an optimal burnin and number of
-#' networks to simulate, and if using Metropolis Hasings, will attempt to select
-#' a proposal variance that leads to a acceptance rate within +-0.05 of
-#' target_accept_rate. Furthermore, if degeneracy is detected, the algorithm
-#' will attempt to adress the issue automatically. WARNING: This feature is
-#' experimental, and may greatly increase runtime. Please monitor console
-#' output!
+#' @param use_previous_thetas Logical, defaults to TRUE. IF TRUE, then at each
+#' iteration of covariate parameter updates beyond the first, the MPLE
+#' initialization for theta parameters will be skipped, and the previous
+#' iteration thetas will be used as a starting point. This option will only work
+#' with convex hull initialization. The intuition here is that if MPLE is poor,
+#' the previous theta estimates may be a better starting point for convex hull
+#' initialization. In some cases this can lead to a very large speedup in
+#' estimation. However, this can lead to arbitrarily poor performance in
+#' some situations.
+#' @param fine_grained_pv_optimization Logical indicating whether fine grained
+#' proposal variance optimization should be used. This will often slow down
+#' proposal variance optimization, but may provide better results. Highly
+#' recommended if running a correlation model.
+#' @param use_MPLE_only Logical specifying whether or not only the maximum pseudo
+#' likelihood estimates should be obtained. In this case, no simulations will be
+#' performed. Default is FALSE.
+#' @param start_with_zeros Defaults to FALSE. IF TRUE, then no MPLE is used and
+#' allendogenous parameters are initialized to zero. This method will still work
+#' with convex_hull_proportion.
 #' @param stop_for_degeneracy When TRUE, automatically stops estimation when
 #' degeneracy is detected, even when hyperparameter_optimization is set to TRUE.
 #' Defaults to FALSE.
-#' @param target_accept_rate The target Metropolis Hastings acceptance rate.
-#' Defaults to 0.25
+#' @param maximum_number_of_lambda_updates Maximum number of iterations of outer
+#' MCMC loop which alternately estimates transform parameters and ERGM
+#' parameters. In the case that data_transformation = NULL, this argument is
+#' ignored. Default is 10.
+#' @param maximum_number_of_theta_updates Maximum number of iterations within the
+#' MCMC inner loop which estimates the ERGM parameters. Default is 100.
+#' @param user_specified_initial_thetas Optional numeric vector of user specified
+#' theta values to be used for initialization (instead of MPLE). This option
+#' should not be used exept when MPLE performance is poor. Defaults to NULL.
+#' @param integration_intervals The number of intervals to be used for numerical
+#' integration in weighted MPLE and in MPLE for the distribution estimator.
+#' Defaults to 150 but may be increased if more accuracy is required.
+#' @param distribution_mple_regularization_weight L2 regularization of the MPLE
+#' theta estimates may be necessary to provide an adequate starting position
+#' when using the distribtuion estimator. We suggest a value of 0.05, but the
+#' optimal L2 penalty will be application specific. Setting to zero removes all
+#' L2 regularization.
 #' @param theta_grid_optimization_list Defaults to NULL. This highly
 #' experimental feature may allow the user to address model degeneracy arising
 #' from a suboptimal theta initialization. It performs a grid search around the
@@ -163,49 +256,16 @@
 #' = 16807 parameter grid search. Again this feature is highly experimental and
 #' should only be used as a last resort (after playing with exponential
 #' down weighting and the MPLE_gain_factor).
-#' @param beta_correlation_model Defaults to FALSE. If TRUE, then the beta
-#' correlation model is estimated. A correlation network must be provided, but
-#' all covariates and undirected statistics may be supplied as normal.
 #' @param weighted_MPLE Defaults to FALSE. Should be used whenever the user is
 #' specifying statistics with alpha down weighting. Tends to provide better
 #' initialization when downweight_statistics_together = FALSE.
-#' @param fine_grained_pv_optimization Logical indicating whether fine grained
-#' proposal variance optimization should be used. This will often slow down
-#' proposal variance optimization, but may provide better results. Highly
-#' recommended if running a correlation model.
-#' @param parallel Logical indicating whether the weighted MPLE objective and any
-#' other operations that can be easily parallelized should be calculated in
-#' parallel. Defaults to FALSE. If TRUE, a significant speedup in computation
-#' may be possible.
-#' @param parallel_statistic_calculation Logical indicating whether network
-#' statistics should be calculated in parallel. This will tend to be slower for
-#' networks with les than ~30 nodes but may provide a substantial speedup for
-#' larger networks.
-#' @param cores Numeric value defaulting to 1. Can be set to any number up to the
-#' number of threads/cores available on your machine. Will be used to speed up
-#' computations if parallel = TRUE.
-#' @param use_stochastic_MH A logical indicating whether a stochastic approximation
-#' to the h statistics should be used under Metropolis Hastings in-between
-#' thinned samples. This may dramatically speed up estimation. Defaults to FALSE.
-#' HIGHLY EXPERIMENTAL!
-#' @param stochastic_MH_proportion Percentage of dyads/triads to use for
-#' approximation, defaults to 0.25.
 #' @param estimate_model Logical indicating whether a model should be estimated.
 #' Defaults to TRUE, but can be set to FALSE if the user simply wishes to return
 #' a GERGM object containing the model specification. Useful for debugging.
-#' @param slackr_integration_list An optional list object that contains
-#' information necessary to provide updates about model fitting progress to a
-#' Slack channel (https://slack.com/). This can be useful if models take a long
-#' time to run, and you wish to receive updates on their progress (or if they
-#' become degenerate). The list object must be of the following form:
-#' list(model_name = "descriptive model name", channel = "#yourchannelname",
-#'  incoming_webhook_url = "https://hooks.slack.com/services/XX/YY/ZZ"). You
-#'  will need to set up incoming webhook integration for your slack channel and
-#'  then paste in the URL you get from slack into the incoming_webhook_url field.
-#'  If all goes well, and the computer you are running the GERGM estimation on
-#'  has internet access, your slack channel will receive updates when you start
-#'  estimation, after each lambda/theta parameter update, if the model becomes
-#'  degenerate, and when it completes running.
+#' @param optimization_method The optimization method used by the 'optim'
+#' function in estimating theta and lambda parameter estimates. Defualts to
+#' "BFGS", but can also be any one of "L-BFGS-B", "Nelder-Mead", "CG", "SANN",
+#' or "Brent". "L-BFGS-B" is preferred for fitting beta correlation models.
 #' @param ... Optional arguments, currently unsupported.
 #' @return A gergm object containing parameter estimates.
 #' @examples
@@ -233,42 +293,53 @@
 #' @export
 gergm <- function(formula,
                   covariate_data = NULL,
-                  normalization_type = c("log","division"),
+                  beta_correlation_model = FALSE,
+                  distribution_estimator = c("none","rowwise-marginal","joint"),
                   network_is_directed = TRUE,
-                  use_MPLE_only = c(FALSE, TRUE),
-                  transformation_type = c("Cauchy","LogCauchy","Gaussian","LogNormal"),
-                  estimation_method = c("Metropolis","Gibbs"),
-                  maximum_number_of_lambda_updates = 10,
-                  maximum_number_of_theta_updates = 10,
+                  include_diagonal = FALSE,
                   number_of_networks_to_simulate = 500,
+                  MCMC_burnin = 100,
                   thin = 1,
                   proposal_variance = 0.1,
-                  downweight_statistics_together = TRUE,
-                  MCMC_burnin = 100,
+                  target_accept_rate = 0.25,
                   seed = 123,
+                  hyperparameter_optimization = FALSE,
+                  convex_hull_proportion = 0.9,
+                  convex_hull_convergence_proportion = 0.9,
+                  sample_edges_at_a_time = 0,
+                  parallel = FALSE,
+                  parallel_statistic_calculation = FALSE,
+                  cores = 1,
+                  use_stochastic_MH = FALSE,
+                  stochastic_MH_proportion = 0.25,
+                  slackr_integration_list = NULL,
                   convergence_tolerance = 0.5,
                   MPLE_gain_factor = 0,
                   acceptable_fit_p_value_threshold = 0.05,
+                  normalization_type = c("log","division"),
+                  transformation_type = c("Cauchy","LogCauchy","Gaussian","LogNormal"),
+                  estimation_method = c("Metropolis","Gibbs"),
+                  downweight_statistics_together = TRUE,
                   force_x_theta_updates = 1,
                   force_x_lambda_updates = 1,
                   output_directory = NULL,
                   output_name = NULL,
                   generate_plots = TRUE,
                   verbose = TRUE,
-                  hyperparameter_optimization = FALSE,
-                  stop_for_degeneracy = FALSE,
-                  target_accept_rate = 0.25,
-                  theta_grid_optimization_list = NULL,
-                  beta_correlation_model = FALSE,
-                  weighted_MPLE = FALSE,
+                  use_previous_thetas = TRUE,
                   fine_grained_pv_optimization = FALSE,
-                  parallel = FALSE,
-                  parallel_statistic_calculation = FALSE,
-                  cores = 1,
-                  use_stochastic_MH = FALSE,
-                  stochastic_MH_proportion = 0.25,
+                  use_MPLE_only = c(FALSE, TRUE),
+                  start_with_zeros = FALSE,
+                  stop_for_degeneracy = FALSE,
+                  maximum_number_of_lambda_updates = 10,
+                  maximum_number_of_theta_updates = 10,
+                  user_specified_initial_thetas = NULL,
+                  integration_intervals = 150,
+                  distribution_mple_regularization_weight = 0.05,
+                  theta_grid_optimization_list = NULL,
+                  weighted_MPLE = FALSE,
                   estimate_model = TRUE,
-                  slackr_integration_list = NULL,
+                  optimization_method = c("BFGS", "L-BFGS-B", "Nelder-Mead", "CG", "SANN", "Brent"),
                   ...
                   ){
 
@@ -284,10 +355,67 @@ gergm <- function(formula,
                                  "ctriads",
                                  "mutual",
                                  "ttriads",
-                                 "edges")
+                                 "edges",
+                                 "diagonal")
   possible_structural_terms_undirected <- c("twostars",
                                             "ttriads",
-                                            "edges")
+                                            "edges",
+                                            "diagonal")
+  possible_covariate_terms <- c("absdiff",
+                                "nodecov",
+                                "nodematch",
+                                "sender",
+                                "receiver",
+                                "intercept",
+                                "nodemix")
+  possible_network_terms <- "netcov"
+  possible_transformations <- c("cauchy",
+                                "logcauchy",
+                                "gaussian",
+                                "lognormal")
+
+
+  # set logical values for whether we are using MPLE only, whether the network
+  # is directed, and which estimation method we are using as well as the
+  # transformation type
+  use_MPLE_only <- use_MPLE_only[1] #default is FALSE
+  network_is_directed <- network_is_directed[1] #default is TRUE
+  estimation_method <- estimation_method[1] #default is MH
+  transformation_type <- transformation_type[1] #default is "Cauchy"
+  transformation_type <- tolower(transformation_type)
+  normalization_type <- normalization_type[1]
+  distribution_estimator <- distribution_estimator[1]
+  using_distribution_estimator <- FALSE
+  optimization_method <- optimization_method[1]
+
+  # deal with the case where we are using a distribution estimator
+  if (distribution_estimator %in%  c("none","rowwise-marginal","joint")) {
+    # if we are actually using the distribution estimator
+    if (distribution_estimator != "none") {
+      # perform checks and set variables so that they are at their correct values.
+      cat("Making sure all options are set properly for use with the",
+          "distribution estimator... \n")
+      use_MPLE_only <- FALSE
+      estimation_method <- "Metropolis"
+      covariate_data <- NULL
+      network_is_directed <- TRUE
+      normalization_type <- "division"
+      beta_correlation_model <- FALSE
+      using_distribution_estimator <- TRUE
+      include_diagonal <- TRUE
+    }
+  } else {
+    stop("distribution_estimator must be one of 'none','rowwise-marginal', or 'joint'")
+  }
+
+  # add a diagonal term if requested.
+  if (include_diagonal) {
+    if (estimation_method == "Gibbs") {
+      cat("Gibbs sampling is currently not supported when include_diagonal == TRUE, changing to 'Metropolis'")
+      estimation_method <- "Metropolis"
+    }
+    formula <- add_diagonal_term(formula)
+  }
 
   # set the number of threads to use with parallel
   if (parallel) {
@@ -303,24 +431,10 @@ gergm <- function(formula,
   }
 
   if (network_is_directed) {
-    possible_structural_term_indices <- 1:6
+    possible_structural_term_indices <- 1:7
   } else {
-    possible_structural_term_indices <- c(2,5,6)
+    possible_structural_term_indices <- c(2,5,6,7)
   }
-
-  possible_covariate_terms <- c("absdiff",
-                                "nodecov",
-                                "nodematch",
-                                "sender",
-                                "receiver",
-                                "intercept",
-                                "nodemix")
-  possible_network_terms <- "netcov"
-  possible_transformations <- c("cauchy",
-                                "logcauchy",
-                                "gaussian",
-                                "lognormal")
-
 
   # check terms for undirected network
   if (!network_is_directed) {
@@ -336,6 +450,7 @@ gergm <- function(formula,
                                possible_structural_terms,
                                possible_covariate_terms,
                                possible_network_terms,
+                               using_distribution_estimator,
                                raw_network = NULL,
                                theta = NULL,
                                terms_to_parse = "structural",
@@ -347,16 +462,6 @@ gergm <- function(formula,
       formula <- add_intercept_term(formula)
     }
   }
-
-  # set logical values for whether we are using MPLE only, whether the network
-  # is directed, and which estimation method we are using as well as the
-  # transformation type
-  use_MPLE_only <- use_MPLE_only[1] #default is FALSE
-  network_is_directed <- network_is_directed[1] #default is TRUE
-  estimation_method <- estimation_method[1] #default is Gibbs
-  transformation_type <- transformation_type[1] #default is "Cauchy"
-  transformation_type <- tolower(transformation_type)
-  normalization_type <- normalization_type[1]
 
   if (is.null(output_directory) & !is.null(output_name)) {
     stop("You have specified an output file name but no output directory. Please
@@ -373,6 +478,11 @@ gergm <- function(formula,
     stop("You supplied a proposal variance that was less than or equal to zero.")
   }
 
+  # make sure than thin is always less than one, if not, just take its reciprocal.
+  if (thin > 1) {
+    thin <- 1/thin
+  }
+
   formula <- as.formula(formula)
 
   #0. Prepare the data
@@ -385,7 +495,8 @@ gergm <- function(formula,
      normalization_type = normalization_type,
      is_correlation_network = FALSE,
      is_directed = network_is_directed,
-     beta_correlation_model = beta_correlation_model)
+     beta_correlation_model = beta_correlation_model,
+     include_diagonal = include_diagonal)
 
   data_transformation <- NULL
   if (!is.null(Transformed_Data$transformed_covariates)) {
@@ -401,6 +512,7 @@ gergm <- function(formula,
      possible_structural_terms,
      possible_covariate_terms,
      possible_network_terms,
+     using_distribution_estimator,
      raw_network = Transformed_Data$network,
      together = 1,
      transform.data = data_transformation,
@@ -440,10 +552,20 @@ gergm <- function(formula,
   # if we are using a correlation network then set field to TRUE.
   GERGM_Object@is_correlation_network <- FALSE # deprecated
   GERGM_Object@beta_correlation_model <- beta_correlation_model
+  GERGM_Object@distribution_estimator <- distribution_estimator
+  GERGM_Object@include_diagonal <- include_diagonal
+  GERGM_Object@user_specified_initial_thetas
+  GERGM_Object@use_user_specified_initial_thetas <- FALSE
+  if (!is.null(user_specified_initial_thetas)) {
+    GERGM_Object@user_specified_initial_thetas <- user_specified_initial_thetas
+    GERGM_Object@use_user_specified_initial_thetas <- TRUE
+  }
 
   # record the various optimizations we are using so that they can be used in
   # the main algorithm
   GERGM_Object@weighted_MPLE <- weighted_MPLE
+  GERGM_Object@integration_intervals <- integration_intervals
+  GERGM_Object@regularization_weight <- distribution_mple_regularization_weight
   GERGM_Object@fine_grained_pv_optimization <- fine_grained_pv_optimization
   GERGM_Object@parallel <- parallel
   GERGM_Object@parallel_statistic_calculation <- parallel_statistic_calculation
@@ -462,6 +584,21 @@ gergm <- function(formula,
   GERGM_Object@burnin <- MCMC_burnin
   GERGM_Object@MPLE_gain_factor <- MPLE_gain_factor
   GERGM_Object@start_time <- toString(start_time)
+  GERGM_Object@start_with_zeros <- start_with_zeros
+  GERGM_Object@sample_edges_at_a_time <- sample_edges_at_a_time
+
+  if (is.null(convex_hull_proportion)) {
+    GERGM_Object@convex_hull_proportion <- -1
+  } else {
+    GERGM_Object@convex_hull_proportion <- convex_hull_proportion
+  }
+
+  GERGM_Object@convex_hull_convergence_proportion <-  convex_hull_convergence_proportion
+
+  GERGM_Object@optimization_method <- optimization_method
+  GERGM_Object@use_previous_thetas <- use_previous_thetas
+
+
 
   GERGM_Object@using_slackr_integration <- FALSE
   if (!is.null(slackr_integration_list)) {
@@ -487,6 +624,8 @@ gergm <- function(formula,
   GERGM_Object@statistic_auxiliary_data <- prepare_statistic_auxiliary_data(
     GERGM_Object)
 
+  #GERGM_Object@statistic_auxiliary_data$triples
+  #GERGM_Object@statistic_auxiliary_data$pairs
   # record statistics on observed and bounded network
   h.statistics1 <- calculate_h_statistics(
     GERGM_Object,
@@ -579,9 +718,12 @@ gergm <- function(formula,
     # the newly simulated data with the original network
     statistic_test_p_values <- rep(NA,ncol(hsn.tot))
     for (i in 1:ncol(hsn.tot)) {
-      statistic_test_p_values[i] <- round(t.test(hsn.tot[, i],
-                                                 mu = init.statistics[i])$p.value,3)
+      if (length(unique(hsn.tot[,i])) > 1) {
+        statistic_test_p_values[i] <- round(t.test(hsn.tot[, i],
+                                                   mu = init.statistics[i])$p.value,3)
+      }
     }
+
 
     stats.data <- data.frame(Observed = init.statistics,
                              Simulated = colMeans(hsn.tot))
@@ -676,7 +818,7 @@ gergm <- function(formula,
 
     # transform networks back to observed scale
     cat("Transforming networks simulated via MCMC as part of the fit diagnostics back on to the scale of observed network. You can access these networks through the '@MCMC_output$Networks' field returned by this function...\n")
-    GERGM_Object <- Convert_Simulated_Networks_To_Observed_Scale(GERGM_Object)
+    GERGM_Object <- convert_simulated_networks_to_observed_scale(GERGM_Object)
   } else {
     cat("Returning GERGM object without estimating model...\n")
   }

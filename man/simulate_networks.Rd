@@ -11,8 +11,9 @@ simulate_networks(formula, thetas, simulation_method = c("Metropolis",
   GERGM_Object = NULL, return_constrained_networks = FALSE,
   optimize_proposal_variance = FALSE, target_accept_rate = 0.25,
   use_stochastic_MH = FALSE, stochastic_MH_proportion = 1,
-  beta_correlation_model = FALSE, covariate_data = NULL, lambdas = NULL,
-  ...)
+  beta_correlation_model = FALSE, distribution_estimator = c("none",
+  "rowwise-marginal", "joint"), covariate_data = NULL, lambdas = NULL,
+  include_diagonal = FALSE, ...)
 }
 \arguments{
 \item{formula}{A formula object that specifies which statistics the user would
@@ -86,6 +87,19 @@ approximation, defaults to 0.25}
 correlation model is estimated. A correlation network must be provided, but
 all covariates and undirected statistics may be supplied as normal.}
 
+\item{distribution_estimator}{Provides an option to estimate the structure of
+row-wise marginal and joint distribtuions using a uniform-dirichlet proposal
+distribution. THIS FEATURE IS EXPERIMENTAL. Defaults to "none", in which case
+a normal GERGM is estimated, but can be set to one of "rowwise-marginal" and
+"joint" to propose either row-wsie marginal distribtuions or joint
+distributions. If an option other than "none" is selected, the beta correlation
+model will be turned off, estimation will automatically be set to Metropolis,
+no covariate data will be allowed, and the network will be set to
+directed. Furthermore, a "diagonal" statistic will be added to the model which
+simply records the sum of the diagonal of the network. The "mutual" statistic
+will also be adapted to include the diagonal elements. In the future, more
+statistics which take account of the network diagonal will be included.}
+
 \item{covariate_data}{A data frame containing node level covariates the user
 wished to transform into sender or receiver effects. It must have row names
 that match every entry in colnames(raw_network), should have descriptive
@@ -95,6 +109,10 @@ added.}
 \item{lambdas}{A vector of lambda parameters given in the same order as the
 formula terms, which the user would like to use to parameterize the model.
 Covariate effects should be specified after endogenous effects.}
+
+\item{include_diagonal}{Logical indicating whether the diagonal should be
+included in the estimation proceedure. If TRUE, then a "diagonal" statistic
+is added to the model. Defaults to FALSE.}
 
 \item{...}{Optional arguments, currently unsupported.}
 }

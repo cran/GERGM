@@ -55,6 +55,18 @@
 #' @param beta_correlation_model Defaults to FALSE. If TRUE, then the beta
 #' correlation model is estimated. A correlation network must be provided, but
 #' all covariates and undirected statistics may be supplied as normal.
+#' @param distribution_estimator Provides an option to estimate the structure of
+#' row-wise marginal and joint distribtuions using a uniform-dirichlet proposal
+#' distribution. THIS FEATURE IS EXPERIMENTAL. Defaults to "none", in which case
+#' a normal GERGM is estimated, but can be set to one of "rowwise-marginal" and
+#' "joint" to propose either row-wsie marginal distribtuions or joint
+#' distributions. If an option other than "none" is selected, the beta correlation
+#' model will be turned off, estimation will automatically be set to Metropolis,
+#' no covariate data will be allowed, and the network will be set to
+#' directed. Furthermore, a "diagonal" statistic will be added to the model which
+#' simply records the sum of the diagonal of the network. The "mutual" statistic
+#' will also be adapted to include the diagonal elements. In the future, more
+#' statistics which take account of the network diagonal will be included.
 #' @param covariate_data A data frame containing node level covariates the user
 #' wished to transform into sender or receiver effects. It must have row names
 #' that match every entry in colnames(raw_network), should have descriptive
@@ -63,6 +75,9 @@
 #' @param lambdas A vector of lambda parameters given in the same order as the
 #' formula terms, which the user would like to use to parameterize the model.
 #' Covariate effects should be specified after endogenous effects.
+#' @param include_diagonal Logical indicating whether the diagonal should be
+#' included in the estimation proceedure. If TRUE, then a "diagonal" statistic
+#' is added to the model. Defaults to FALSE.
 #' @param ... Optional arguments, currently unsupported.
 #' @examples
 #' \dontrun{
@@ -113,8 +128,10 @@ simulate_networks <- function(formula,
   use_stochastic_MH = FALSE,
   stochastic_MH_proportion = 1,
   beta_correlation_model = FALSE,
+  distribution_estimator = c("none","rowwise-marginal","joint"),
   covariate_data = NULL,
   lambdas = NULL,
+  include_diagonal = FALSE,
   ...
 ){
 
@@ -124,34 +141,68 @@ simulate_networks <- function(formula,
   }
 
   # hard coded possible stats
-  possible_structural_terms <- c("out2stars", "in2stars", "ctriads", "mutual", "ttriads","edges")
+  possible_structural_terms <- c("out2stars",
+                                 "in2stars",
+                                 "ctriads",
+                                 "mutual",
+                                 "ttriads",
+                                 "edges",
+                                 "diagonal")
   possible_structural_terms_undirected <- c("twostars",
                                             "ttriads",
-                                            "edges")
-  if (network_is_directed) {
-    possible_structural_term_indices <- 1:6
-  } else {
-    possible_structural_term_indices <- c(2,5,6)
-  }
-  possible_covariate_terms <- c("absdiff", "nodecov", "nodematch", "sender", "receiver", "intercept", "nodemix")
+                                            "edges",
+                                            "diagonal")
+
+  possible_covariate_terms <- c("absdiff",
+                                "nodecov",
+                                "nodematch",
+                                "sender",
+                                "receiver",
+                                "intercept",
+                                "nodemix")
   possible_network_terms <- "netcov"
   # possible_transformations <- c("cauchy", "logcauchy", "gaussian", "lognormal")
+
+  # make sure than thin is always less than one, if not, just take its reciprocal.
+  if (thin > 1) {
+    thin <- 1/thin
+  }
+
+  distribution_estimator <- distribution_estimator[1]
+  using_distribution_estimator <- FALSE
 
   if (is.null(GERGM_Object)) {
     # pass in experimental correlation network feature through elipsis
     simulate_correlation_network <- FALSE
     weighted_MPLE <- FALSE
     object <- as.list(substitute(list(...)))[-1L]
-    if (length(object) > 0) {
-      if (!is.null(object$simulate_correlation_network)) {
-        if (object$simulate_correlation_network) {
-          simulate_correlation_network <- TRUE
-          cat("Using experimental correlation network feature...\n")
-        }
+
+    # deal with the case where we are using a distribution estimator
+    if (distribution_estimator %in%  c("none","rowwise-marginal","joint")) {
+      # if we are actually using the distribution estimator
+      if (distribution_estimator != "none") {
+        # perform checks and set variables so that they are at their correct values.
+        cat("Making sure all options are set properly for use with the",
+            "distribution estimator... \n")
+        use_MPLE_only <- FALSE
+        estimation_method <- "Metropolis"
+        covariate_data <- NULL
+        network_is_directed <- TRUE
+        normalization_type <- "division"
+        beta_correlation_model <- FALSE
+        using_distribution_estimator <- TRUE
       }
+    } else {
+      stop("distribution_estimator must be one of 'none','rowwise-marginal', or 'joint'")
     }
 
-    # This is the main function to estimate a GERGM model
+    # check terms for undirected network
+    if (!network_is_directed) {
+      formula <- parse_undirected_structural_terms(
+        formula,
+        possible_structural_terms,
+        possible_structural_terms_undirected)
+    }
 
     # check to see if we are using a regression intercept term, and if we are,
     # then add the "intercept" field to the formula.
@@ -159,6 +210,7 @@ simulate_networks <- function(formula,
                                             possible_structural_terms,
                                             possible_covariate_terms,
                                             possible_network_terms,
+                                            using_distribution_estimator,
                                             raw_network = NULL,
                                             theta = NULL,
                                             terms_to_parse = "structural",
@@ -179,12 +231,10 @@ simulate_networks <- function(formula,
     transformation_type <- "cauchy"
     normalization_type <- "division"
 
-    # check terms for undirected network
-    if (!network_is_directed) {
-      formula <- parse_undirected_structural_terms(
-        formula,
-        possible_structural_terms,
-        possible_structural_terms_undirected)
+    if (network_is_directed) {
+      possible_structural_term_indices <- 1:7
+    } else {
+      possible_structural_term_indices <- c(2,5,6,7)
     }
 
     if (simulate_correlation_network & beta_correlation_model) {
@@ -230,6 +280,7 @@ simulate_networks <- function(formula,
       possible_structural_terms,
       possible_covariate_terms,
       possible_network_terms,
+      using_distribution_estimator,
       raw_network = Transformed_Data$network,
       together = 1,
       transform.data = data_transformation,
@@ -270,6 +321,9 @@ simulate_networks <- function(formula,
     GERGM_Object@use_stochastic_MH <- use_stochastic_MH
     GERGM_Object@stochastic_MH_proportion <- stochastic_MH_proportion
     GERGM_Object@possible_endogenous_statistic_indices <- possible_structural_term_indices
+    GERGM_Object@distribution_estimator <- distribution_estimator
+    GERGM_Object@use_user_specified_initial_thetas <- FALSE
+    GERGM_Object@include_diagonal <- include_diagonal
 
     # prepare auxiliary data
     GERGM_Object@statistic_auxiliary_data <- prepare_statistic_auxiliary_data(
@@ -409,7 +463,7 @@ simulate_networks <- function(formula,
   if (!return_constrained_networks) {
     cat("Transforming networks simulated via MCMC as part of the fit diagnostics back on to the scale of observed network. You can access these networks through the '@MCMC_output$Networks' field returned by this function...\n")
     GERGM_Object@simulated_bounded_networks_for_GOF <- GERGM_Object@MCMC_output$Networks
-    GERGM_Object <- Convert_Simulated_Networks_To_Observed_Scale(GERGM_Object)
+    GERGM_Object <- convert_simulated_networks_to_observed_scale(GERGM_Object)
   } else {
     cat("Returning constrained [0,1] simulated networks...\n")
   }

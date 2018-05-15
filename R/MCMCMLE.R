@@ -17,9 +17,39 @@ MCMCMLE <- function(mc.num.iterations,
                            outter_iteration_number = outter_iteration_number)
 
   GERGM_Object <- MPLE_Results$GERGM_Object
-  theta <- MPLE_Results$theta
   statistics <- MPLE_Results$statistics
   init.statistics <- MPLE_Results$init.statistics
+
+  if (GERGM_Object@convex_hull_proportion != -1 &
+      GERGM_Object@use_previous_thetas &
+      outter_iteration_number > 1) {
+    # skip MPLE intiialization
+    temp <- theta
+    theta <- list()
+    theta$par <- temp
+  } else {
+    theta <- MPLE_Results$theta
+  }
+
+  # if we are initializing with all zeros, then reset theta to be all zeros.
+  if (GERGM_Object@start_with_zeros) {
+    cat("Zeroing out initial thetas becasue start_with_zeros = TRUE...\n")
+    theta$par <- rep(0, length(theta))
+  }
+
+  # make sure we store the current value of theta in the GERGM object:
+  GERGM_Object@theta.par <- theta$par
+
+  # now if we are using convex_hull_proportion, then call convex hull
+  # initialization.
+  if (GERGM_Object@convex_hull_proportion != -1) {
+    GERGM_Object <- convex_hull_initialization(GERGM_Object,
+                                               seed2,
+                                               possible.stats,
+                                               verbose)
+    theta$par <- GERGM_Object@theta.par
+  }
+
 
   ##########################################################################
   ## Simulate new networks
@@ -95,7 +125,7 @@ MCMCMLE <- function(mc.num.iterations,
                        together = GERGM_Object@downweight_statistics_together,
                        possible.stats = possible.stats,
                        GERGM_Object = GERGM_Object,
-                       method = "BFGS",
+                       method = GERGM_Object@optimization_method,
                        hessian = T,
                        control = list(fnscale = -1, trace = 6))
     } else {
@@ -107,12 +137,14 @@ MCMCMLE <- function(mc.num.iterations,
                          together = GERGM_Object@downweight_statistics_together,
                          possible.stats = possible.stats,
                          GERGM_Object = GERGM_Object,
-                         method = "BFGS",
+                         method = GERGM_Object@optimization_method,
                          hessian = T,
                          control = list(fnscale = -1, trace = 0))
     }
     if (verbose) {
-      cat("\n", "Theta Estimates: ", paste0(theta.new$par,collapse = " "), "\n",sep = "")
+      cat("\nTheta Estimates:\n")
+      names(theta.new$par) <- colnames(GERGM_Object@theta.coef)
+      print(theta.new$par)
     }
     GERGM_Object <- store_console_output(GERGM_Object,paste("\n", "Theta Estimates: ", paste0(theta.new$par,collapse = " "), "\n",sep = ""))
 
@@ -152,7 +184,9 @@ MCMCMLE <- function(mc.num.iterations,
         }
         GERGM_Object <- store_console_output(GERGM_Object,"\np.values for two-sided z-test of difference between current and updated theta estimates:\n\n")
         if (verbose) {
-            cat(round(p.value,3), "\n \n")
+          names(p.value) <- colnames(GERGM_Object@theta.coef)
+          print(round(p.value))
+            cat("\n")
         }
         GERGM_Object <- store_console_output(GERGM_Object,paste(p.value, "\n \n"))
 
@@ -178,6 +212,10 @@ MCMCMLE <- function(mc.num.iterations,
     GERGM_Object <- store_console_output(GERGM_Object,
       paste("MCMC convergence Geweke test statistic:",geweke_stat,
       "\n(If the absolute value is greater than 1.7, increase MCMC_burnin)\n"))
+
+    if(!is.finite(geweke_stat)) {
+
+    }
 
 
     # see if the parameter values hav increased more than four orders of
@@ -267,6 +305,31 @@ MCMCMLE <- function(mc.num.iterations,
         GERGM_Object <- store_console_output(GERGM_Object,"Parameter estimates appear to have become degenerate, returning previous thetas. Model output should not be trusted. Try specifying a larger number of simulations or a different parameterization.")
         return(list(theta.new,GERGM_Object))
       }
+    } else if (!is.finite(geweke_stat)) {
+      old_nsim <- GERGM_Object@number_of_simulations
+      old_burinin <- GERGM_Object@burnin
+      new_nsim <- 2 * old_nsim
+      new_burnin <- 2 * old_burinin
+      GERGM_Object@number_of_simulations <- new_nsim
+      GERGM_Object@burnin <- new_burnin
+      old_thin <- GERGM_Object@thin
+      GERGM_Object@thin <- old_thin/2
+      GERGM_Object@proposal_variance <- GERGM_Object@proposal_variance/10
+      cat("MH acceptance rate was zero. Reducing proposal_variance by an order",
+          "of magnitude to:",GERGM_Object@proposal_variance,"\n")
+      GERGM_Object <- store_console_output(GERGM_Object,paste(
+        "MH acceptance rate was zero. Reducing proposal_variance by an order",
+        "of magnitude to:",GERGM_Object@proposal_variance))
+      cat("Doubling burnin from:", old_burinin, "to", new_burnin,
+          "and number of networks simulated from:", old_nsim, "to", new_nsim,
+          "in an attempt to address degeneracy issue...\n")
+      GERGM_Object <- store_console_output(GERGM_Object,paste(
+        "Doubling burnin from:", old_burinin, "to", new_burnin,
+        "and number of networks simulated from:", old_nsim, "to", new_nsim,
+        "in an attempt to address degeneracy issue..."))
+
+      # do not allow convergence
+      allow_convergence <- FALSE
     } else if (abs(geweke_stat) > 1.7){
       # if model was not degenerate but Geweke statistics say it did not converge
       # double number of iterations and burnin automatically.

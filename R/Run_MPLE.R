@@ -17,7 +17,10 @@ run_mple <- function(GERGM_Object,
   }
   GERGM_Object <- store_console_output(GERGM_Object,"Estimating Initial Values for Theta via MPLE... \n")
 
-  if (GERGM_Object@is_correlation_network) {
+  if (GERGM_Object@distribution_estimator != "none") {
+    theta.init <- mple_distribution(GERGM_Object,
+                                    verbose = verbose)
+  } else if (GERGM_Object@is_correlation_network) {
     theta.init <- mple.corr(GERGM_Object@network,
                             GERGM_Object@bounded.network,
                             statistics = GERGM_Object@stats_to_use,
@@ -51,12 +54,13 @@ run_mple <- function(GERGM_Object,
     theta.init <- ex_mple(GERGM_Object, verbose = verbose)
   }
   if (verbose) {
-    cat("\nMPLE Thetas: ", theta.init$par, "\n")
+    cat("\nMPLE Thetas:\n")
+    names(theta.init$par) <- colnames(GERGM_Object@theta.coef)
+    print(theta.init$par)
   }
   GERGM_Object <- store_console_output(GERGM_Object,
     paste("\nMPLE Thetas: ", theta.init$par, "\n"))
-  num.nodes <- GERGM_Object@num_nodes
-  triples <- t(combn(1:num.nodes, 3))
+
   if (GERGM_Object@is_correlation_network) {
     init.statistics <- calculate_h_statistics(
       GERGM_Object,
@@ -151,6 +155,13 @@ run_mple <- function(GERGM_Object,
                                            statistics)
       cat("Updated thetas after grid search:",theta$par,"\n\n")
     }
+  }
+
+  if (GERGM_Object@use_user_specified_initial_thetas) {
+    cat("Changing MPLE thetas to user specified thetas...\n")
+    print(GERGM_Object@user_specified_initial_thetas)
+    theta$par <- GERGM_Object@user_specified_initial_thetas
+    GERGM_Object@theta.par <- GERGM_Object@user_specified_initial_thetas
   }
 
   theta$par <- as.numeric(theta$par)

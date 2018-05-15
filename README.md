@@ -1,9 +1,22 @@
-# GERGM -- Master: [![Travis-CI Build Status](https://travis-ci.org/matthewjdenny/GERGM.svg?branch=master)](https://travis-ci.org/matthewjdenny/GERGM) [![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/GERGM)](https://CRAN.R-project.org/package=GERGM) Development: [![Travis-CI Build Status](https://travis-ci.org/matthewjdenny/GERGM.svg?branch=Development)](https://travis-ci.org/matthewjdenny/GERGM)
+# GERGM -- Master: [![Travis-CI Build Status](https://travis-ci.org/matthewjdenny/GERGM.svg?branch=master)](https://travis-ci.org/matthewjdenny/GERGM) [![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/GERGM)](https://CRAN.R-project.org/package=GERGM) ![](http://cranlogs.r-pkg.org/badges/GERGM) ![](http://cranlogs.r-pkg.org/badges/grand-total/GERGM)
 An R package to estimate Generalized Exponential Random Graph Models. To get started, **[check out this vignette!](http://www.mjdenny.com/getting_started_with_GERGM.html)**
 
 **PLEASE REPORT ANY BUGS OR ERRORS TO <mdenny@psu.edu>**. 
 
 ## News
+
+**[05/15/18]** Major estimation updates with version 0.13.x.
+
+* I have implemented the convex hull initialization method of Hummel et al (2012) as the default option in the package. This method is often vastly more efficient and effective at initializing the model parameter for Metropolis Hastings, and can result in a 99%+ reduction in model runtime in some situations.
+* The covariate parameter estiamtion proceedure has been sped up by reimplementing in C++.
+* The gergm() function now skips MPLE after the first iteration of covariate parameter estimation and uses the previous theta values instead. This often dramatically speeds up estimation, but can be controlled with a logical argument.
+* For large networks, or networks yielding a very low MH acceptance rate, the `sample_edges_at_a_time` option allows the user to propose blocks of edges at a time in the MH updates. This can be used to optimally tune the model acceptance rate.
+
+**[04/13/17]** New estimation functionality, bug fixes.
+
+* A bug fix was added for the initialization of the covariate parameter estimates which will lead to faster convergence and more stable estimation.
+* New option to estimate structural features (no covariates currently) for rowwise marginal distributions. See the `distribution_estimator` argument.
+* More updates to the documentation to make it easier to read.
 
 **[03/12/17]** A number of minor updates to the GERGM package (mostly in the documentation) and bump to version 0.11.0 on CRAN:
 
